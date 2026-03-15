@@ -1,0 +1,88 @@
+services:
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cloudsecure}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  valkey:
+    image: valkey/valkey:latest
+    ports:
+      - "6379:6379"
+
+  neo4j:
+    image: neo4j:5-community
+    environment:
+      NEO4J_AUTH: neo4j/${NEO4J_PASSWORD}
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    volumes:
+      - neo4j_data:/data
+
+  backend:
+    build: ./backend
+    command: python manage.py runserver 0.0.0.0:8000
+    volumes:
+      - ./backend:/app
+      - ~/.aws:/root/.aws:ro
+    ports:
+      - "8000:8000"
+    env_file: .env
+    environment:
+      DJANGO_SETTINGS_MODULE: cloudsecure.settings.local
+    depends_on:
+      db:
+        condition: service_healthy
+      valkey:
+        condition: service_started
+      neo4j:
+        condition: service_started
+
+  celery:
+    build: ./backend
+    command: celery -A cloudsecure worker --loglevel=info -Q default,inventory
+    volumes:
+      - ./backend:/app
+      - ~/.aws:/root/.aws:ro
+    env_file: .env
+    environment:
+      DJANGO_SETTINGS_MODULE: cloudsecure.settings.local
+    depends_on:
+      - db
+      - valkey
+
+  celery-beat:
+    build: ./backend
+    command: celery -A cloudsecure beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    volumes:
+      - ./backend:/app
+    env_file: .env
+    environment:
+      DJANGO_SETTINGS_MODULE: cloudsecure.settings.local
+    depends_on:
+      - db
+      - valkey
+
+  frontend:
+    build: ./frontend
+    command: npm run dev -- --host
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "3000:3000"
+    environment:
+      VITE_API_URL: http://localhost:8000
+
+volumes:
+  postgres_data:
+  neo4j_data:

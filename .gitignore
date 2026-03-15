@@ -1,0 +1,55 @@
+# Secrets and env (never commit)
+.env
+.env.local
+.env.*.local
+*.pem
+secrets/
+*.key
+
+# Keep example env files (safe to commit)
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+.venv/
+venv/
+env/
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# Node / frontend
+node_modules/
+npm-debug.log*
+.pnp/
+.pnp.js
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+*~
+.DS_Store
+
+# Django
+*.log
+local_settings.py
+db.sqlite3
+media/
+staticfiles/
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# Test / coverage
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Optional
+*.pdf
