@@ -113,6 +113,12 @@ export default function RulesViolatedTable({
                       <pre className="mt-1 whitespace-pre-wrap rounded bg-slate-200 p-3 font-mono text-xs text-slate-800">
                         {f.remediation_steps || "No steps provided."}
                       </pre>
+                      <p className="mt-3 font-medium text-slate-700">Resource Config</p>
+                      <pre className="mt-1 whitespace-pre-wrap rounded bg-slate-200 p-3 font-mono text-xs text-slate-800">
+                        {f.resource_config
+                          ? JSON.stringify(f.resource_config, null, 2)
+                          : "No stored config found."}
+                      </pre>
                     </td>
                   </tr>
                 )}

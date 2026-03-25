@@ -25,26 +25,45 @@ def _arn_to_cfn_type(arn: str) -> str | None:
     if len(parts) < 6:
         return None
     service = (parts[2] or "").strip().upper()
-    resource_part = (parts[5] or "").split("/")[0].strip()
+    resource_part = (parts[5] or "").split("/")[0].strip().lower()
     if not service or not resource_part:
         return None
-    # security-group -> SecurityGroup
+
+    # Service-specific canonical mappings for common ARN resource tokens.
+    if service == "S3":
+        return "AWS::S3::Bucket"
+    if service == "IAM":
+        if resource_part == "role":
+            return "AWS::IAM::Role"
+        if resource_part == "user":
+            return "AWS::IAM::User"
+    if service == "RDS":
+        if resource_part == "db":
+            return "AWS::RDS::DBInstance"
+    if service == "KMS":
+        if resource_part == "key":
+            return "AWS::KMS::Key"
+    if service == "CLOUDTRAIL":
+        if resource_part == "trail":
+            return "AWS::CloudTrail::Trail"
+
+    # Generic fallback: security-group -> SecurityGroup, instance -> Instance
     pascal = "".join(w.capitalize() for w in resource_part.replace("_", "-").split("-"))
     return f"AWS::{service}::{pascal}"
 
 
 def _get_fetcher(resource_type: str, arn: str):
-    """Return fetcher for this resource: try ResourceType as-is, then ARN-derived CFN type."""
+    """Return (fetcher, effective_resource_type)."""
     fetcher = FETCHER_MAP.get(resource_type)
     if fetcher is not None:
-        return fetcher
+        return fetcher, resource_type
     cfn_type = _arn_to_cfn_type(arn)
     if cfn_type:
         fetcher = FETCHER_MAP.get(cfn_type)
         if fetcher is not None:
             logger.info("Resolved fetcher via ARN: %r -> %s", arn[:80], cfn_type)
-            return fetcher
-    return None
+            return fetcher, cfn_type
+    return None, resource_type
 
 
 class ConfigurationError(RuntimeError):
@@ -184,6 +203,55 @@ def poll_resource_explorer(account_id: str, role_name: str) -> dict:
     return results
 
 
+def _poll_s3_buckets(account_id: str, role_name: str) -> dict:
+    """
+    Fallback S3 discovery.
+    Resource Explorer may not always surface S3 buckets promptly; list buckets
+    directly so inventory/rule engine can evaluate S3 controls.
+    Returns same shape as poll_resource_explorer().
+    """
+    out: dict[str, dict] = {}
+    try:
+        s3 = get_client(account_id, role_name, "s3", "us-east-1")
+        resp = s3.list_buckets()
+        for b in (resp.get("Buckets") or []):
+            name = b.get("Name")
+            if not name:
+                continue
+            arn = f"arn:aws:s3:::{name}"
+
+            region = "us-east-1"
+            try:
+                loc = s3.get_bucket_location(Bucket=name).get("LocationConstraint")
+                # AWS returns None for us-east-1
+                region = loc or "us-east-1"
+            except Exception:
+                pass
+
+            tags = {}
+            try:
+                tagging = s3.get_bucket_tagging(Bucket=name)
+                for t in tagging.get("TagSet") or []:
+                    k = t.get("Key")
+                    v = t.get("Value")
+                    if k is not None:
+                        tags[str(k)] = "" if v is None else str(v)
+            except Exception:
+                # No tags/denied is non-fatal for discovery.
+                tags = {}
+
+            resource_type = "AWS::S3::Bucket"
+            out[arn] = {
+                "tag_hash": compute_tag_hash(arn, resource_type, region, tags),
+                "type": resource_type,
+                "region": region,
+                "tags": tags,
+            }
+    except Exception as e:
+        logger.warning("S3 bucket discovery fallback failed for %s: %s", account_id, e)
+    return out
+
+
 def compute_delta(current_arns: dict, previous_hashes: dict) -> dict:
     current_set = set(current_arns.keys())
     previous_set = set(previous_hashes.keys())
@@ -248,10 +316,17 @@ def run_inventory_pull(tenant_id: int, provider_id: int, run) -> dict:
 
 
 def _process_account(account, role_name, neo4j_driver, stats, tenant, provider, run):
+    from django.conf import settings
+
     account_id = account.aws_account_id
     logger.info("Processing account %s", account_id)
 
     current_arns = poll_resource_explorer(account_id, role_name)
+    # Optional (disabled by default): direct S3 discovery fallback.
+    # Enable only when troubleshooting RE indexing gaps.
+    if getattr(settings, "ENABLE_S3_FALLBACK_DISCOVERY", False):
+        for arn, meta in _poll_s3_buckets(account_id, role_name).items():
+            current_arns[arn] = meta
     stats["total"] += len(current_arns)
 
     previous_hashes = load_hashes(account_id)
@@ -274,7 +349,7 @@ def _process_account(account, role_name, neo4j_driver, stats, tenant, provider, 
         resource_meta = current_arns[arn]
         resource_type = resource_meta["type"]
         region = resource_meta["region"]
-        fetcher = _get_fetcher(resource_type, arn)
+        fetcher, effective_resource_type = _get_fetcher(resource_type, arn)
 
         if not fetcher:
             stats["skipped_no_fetcher"] += 1
@@ -309,7 +384,7 @@ def _process_account(account, role_name, neo4j_driver, stats, tenant, provider, 
                         account_id,
                         {
                             "arn": arn,
-                            "type": resource_type,
+                                    "type": effective_resource_type,
                             "region": region,
                             "config": config,
                             "tags": resource_meta["tags"],
@@ -331,7 +406,7 @@ def _process_account(account, role_name, neo4j_driver, stats, tenant, provider, 
                 account_id=account_id,
                 arn=arn,
                 defaults={
-                    "resource_type": resource_type,
+                    "resource_type": effective_resource_type,
                     "region": region,
                     "config": config,
                     "tags": resource_meta.get("tags", {}),
@@ -344,7 +419,7 @@ def _process_account(account, role_name, neo4j_driver, stats, tenant, provider, 
                 from tasks.jobs.rule_engine.evaluator import evaluate_resource
 
                 new_findings = evaluate_resource(
-                    resource_type=resource_type,
+                    resource_type=effective_resource_type,
                     arn=arn,
                     account_id=account_id,
                     region=region,

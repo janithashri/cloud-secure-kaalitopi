@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from api.models import Finding, InventoryRun
+from api.models import Finding, InventoryRun, ResourceConfig
 
 
 class InventoryRunSerializer(serializers.ModelSerializer):
@@ -9,6 +9,12 @@ class InventoryRunSerializer(serializers.ModelSerializer):
 
 
 class FindingSerializer(serializers.ModelSerializer):
+    resource_config = serializers.SerializerMethodField()
+
+    def get_resource_config(self, obj):
+        rc = ResourceConfig.objects.filter(account_id=obj.account_id, arn=obj.arn).first()
+        return rc.config if rc else None
+
     class Meta:
         model = Finding
         fields = [
@@ -22,6 +28,7 @@ class FindingSerializer(serializers.ModelSerializer):
             "status",
             "compliance_frameworks",
             "remediation_steps",
+            "resource_config",
             "first_seen",
             "last_seen",
         ]

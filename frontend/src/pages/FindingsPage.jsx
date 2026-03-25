@@ -18,6 +18,7 @@ export default function FindingsPage() {
   const [scanLoading, setScanLoading] = useState(false);
   const [scanPolling, setScanPolling] = useState(false);
   const [latestRun, setLatestRun] = useState(null);
+  const [scanStartedAt, setScanStartedAt] = useState(null);
   const [toast, setToast] = useState(null);
 
   const showToast = useCallback((type, message) => {
@@ -77,6 +78,7 @@ export default function FindingsPage() {
     if (!selectedProviderId) return;
     setScanLoading(true);
     setScanPolling(true);
+    setScanStartedAt(new Date().toISOString());
     setLatestRun(null);
     try {
       await triggerInventoryPull(api, selectedProviderId);
@@ -112,6 +114,9 @@ export default function FindingsPage() {
   useEffect(() => {
     if (!scanPolling) return;
     if (!latestRun) return;
+    if (scanStartedAt && latestRun.started_at && latestRun.started_at < scanStartedAt) {
+      return;
+    }
     if (latestRun.state === "running") return;
 
     setScanPolling(false);
@@ -123,7 +128,7 @@ export default function FindingsPage() {
     } else {
       showToast("error", "Scan failed - check logs");
     }
-  }, [scanPolling, latestRun?.state, fetchSummary, fetchFindings, showToast]);
+  }, [scanPolling, latestRun?.state, latestRun?.started_at, scanStartedAt, fetchSummary, fetchFindings, showToast]);
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-6">
@@ -203,6 +208,22 @@ export default function FindingsPage() {
           <option value="DPDP">DPDP</option>
           <option value="RBI">RBI</option>
           <option value="SBE">SBE</option>
+        </select>
+        <select
+          value={filters.resource_type || ""}
+          onChange={(e) =>
+            setFilters((f) => ({ ...f, resource_type: e.target.value || undefined }))
+          }
+          className="rounded border border-slate-300 px-3 py-2 text-sm"
+        >
+          <option value="">All resources</option>
+          {Object.keys(summary?.by_resource_type || {})
+            .sort()
+            .map((rt) => (
+              <option key={rt} value={rt}>
+                {rt}
+              </option>
+            ))}
         </select>
 
         <button
