@@ -3,14 +3,14 @@
 
 package cloudsecure.rules.india_aws_kms
 
-import future.keywords.in
+import rego.v1
 
-default allow = true
+default allow := true
 
 # ---------------------------------------------------------------------------
 # DPDP / RBI: KMS key policy must not allow public or external access
 # ---------------------------------------------------------------------------
-deny[msg] {
+deny contains msg if {
 	input.asset.asset_type == "kms_key"
 	input.asset.key_policy_public_or_external
 	msg := {
@@ -21,14 +21,14 @@ deny[msg] {
 		"section": "Section 8 - Security",
 		"status": "FAIL",
 		"compliance": ["DPDP 2023 S.8", "RBI", "CERT-In 2022"],
-		"remediation": "aws kms put-key-policy --key-id " + input.asset.key_id + " --policy-name default --policy '{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"AWS\":\"arn:aws:iam::<account_id>:root\"},\"Action\":\"kms:*\",\"Resource\":\"*\"}]}'",
+		"remediation": sprintf("aws kms put-key-policy --key-id %v --policy-name default --policy '{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"AWS\":\"arn:aws:iam::<account_id>:root\"},\"Action\":\"kms:*\",\"Resource\":\"*\"}]}'", [input.asset.key_id]),
 	}
 }
 
 # ---------------------------------------------------------------------------
 # RBI: CMK rotation
 # ---------------------------------------------------------------------------
-deny[msg] {
+deny contains msg if {
 	input.asset.asset_type == "kms_key"
 	input.asset.key_manager == "CUSTOMER"
 	input.asset.key_state == "Enabled"
@@ -41,14 +41,14 @@ deny[msg] {
 		"section": "Cryptographic Controls",
 		"status": "FAIL",
 		"compliance": ["RBI", "CERT-In 2022", "DPDP 2023"],
-		"remediation": "aws kms enable-key-rotation --key-id " + input.asset.key_id,
+		"remediation": sprintf("aws kms enable-key-rotation --key-id %v", [input.asset.key_id]),
 	}
 }
 
 # ---------------------------------------------------------------------------
 # CERT-In: Key pending deletion
 # ---------------------------------------------------------------------------
-deny[msg] {
+deny contains msg if {
 	input.asset.asset_type == "kms_key"
 	input.asset.key_state == "PendingDeletion"
 	msg := {
@@ -59,6 +59,6 @@ deny[msg] {
 		"section": "Key Management",
 		"status": "FAIL",
 		"compliance": ["CERT-In 2022", "RBI", "DPDP 2023"],
-		"remediation": "aws kms cancel-key-deletion --key-id " + input.asset.key_id,
+		"remediation": sprintf("aws kms cancel-key-deletion --key-id %v", [input.asset.key_id]),
 	}
 }

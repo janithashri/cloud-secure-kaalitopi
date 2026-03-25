@@ -3,14 +3,14 @@
 
 package cloudsecure.rules.india_aws_cloudtrail
 
-import future.keywords.in
+import rego.v1
 
-default allow = true
+default allow := true
 
 # ---------------------------------------------------------------------------
 # CERT-In 2022: Multi-region trail with logging
 # ---------------------------------------------------------------------------
-deny[msg] {
+deny contains msg if {
 	input.asset.asset_type == "cloudtrail_trail"
 	not input.asset.is_multi_region
 	msg := {
@@ -21,11 +21,11 @@ deny[msg] {
 		"section": "Logging and Monitoring",
 		"status": "FAIL",
 		"compliance": ["CERT-In 2022", "DPDP 2023"],
-		"remediation": "aws cloudtrail update-trail --name " + input.asset.name + " --is-multi-region-trail",
+		"remediation": sprintf("aws cloudtrail update-trail --name %v --is-multi-region-trail", [input.asset.name]),
 	}
 }
 
-deny[msg] {
+deny contains msg if {
 	input.asset.asset_type == "cloudtrail_trail"
 	not input.asset.is_logging
 	msg := {
@@ -36,14 +36,14 @@ deny[msg] {
 		"section": "Logging and Monitoring",
 		"status": "FAIL",
 		"compliance": ["CERT-In 2022", "DPDP 2023 S.8"],
-		"remediation": "aws cloudtrail start-logging --name " + input.asset.name,
+		"remediation": sprintf("aws cloudtrail start-logging --name %v", [input.asset.name]),
 	}
 }
 
 # ---------------------------------------------------------------------------
 # CERT-In: Log file validation
 # ---------------------------------------------------------------------------
-deny[msg] {
+deny contains msg if {
 	input.asset.asset_type == "cloudtrail_trail"
 	not input.asset.log_file_validation_enabled
 	msg := {
@@ -54,14 +54,14 @@ deny[msg] {
 		"section": "Logging and Monitoring",
 		"status": "FAIL",
 		"compliance": ["CERT-In 2022"],
-		"remediation": "aws cloudtrail update-trail --name " + input.asset.name + " --enable-log-file-validation",
+		"remediation": sprintf("aws cloudtrail update-trail --name %v --enable-log-file-validation", [input.asset.name]),
 	}
 }
 
 # ---------------------------------------------------------------------------
 # DPDP / CERT-In: KMS encryption for logs
 # ---------------------------------------------------------------------------
-deny[msg] {
+deny contains msg if {
 	input.asset.asset_type == "cloudtrail_trail"
 	not input.asset.kms_encryption_enabled
 	msg := {
@@ -72,14 +72,14 @@ deny[msg] {
 		"section": "Section 8 - Security",
 		"status": "FAIL",
 		"compliance": ["DPDP 2023 S.8", "CERT-In 2022", "RBI"],
-		"remediation": "aws cloudtrail update-trail --name " + input.asset.name + " --kms-key-id <kms_key_arn>",
+		"remediation": sprintf("aws cloudtrail update-trail --name %v --kms-key-id <kms_key_arn>", [input.asset.name]),
 	}
 }
 
 # ---------------------------------------------------------------------------
 # S3 bucket for trail publicly accessible
 # ---------------------------------------------------------------------------
-deny[msg] {
+deny contains msg if {
 	input.asset.asset_type == "cloudtrail_trail"
 	input.asset.s3_bucket_public == true
 	msg := {
@@ -90,6 +90,6 @@ deny[msg] {
 		"section": "Logging and Monitoring",
 		"status": "FAIL",
 		"compliance": ["CERT-In 2022", "DPDP 2023"],
-		"remediation": "Enable Block Public Access on the CloudTrail S3 bucket: aws s3api put-public-access-block --bucket " + input.asset.s3_bucket + " --public-access-block-configuration BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true",
+		"remediation": sprintf("Enable Block Public Access on the CloudTrail S3 bucket: aws s3api put-public-access-block --bucket %v --public-access-block-configuration BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true", [input.asset.s3_bucket]),
 	}
 }

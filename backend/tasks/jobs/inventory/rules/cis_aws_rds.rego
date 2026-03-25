@@ -4,15 +4,15 @@
 
 package cloudsecure.rules.cis_aws_rds
 
-import future.keywords.in
+import rego.v1
 
-default allow = true
+default allow := true
 
 # ---------------------------------------------------------------------------
 # RDS publicly accessible
 # Real-world impact: Public RDS instances are exposed to internet-based attacks and data theft.
 # ---------------------------------------------------------------------------
-deny[msg] {
+deny contains msg if {
 	input.asset.asset_type == "rds_instance"
 	input.asset.publicly_accessible == true
 	msg := {
@@ -23,18 +23,18 @@ deny[msg] {
 		"section": "4 Database Services",
 		"status": "FAIL",
 		"compliance": ["CIS 4.3.1", "DPDP 2023", "CERT-In 2022", "RBI"],
-		"remediation": "aws rds modify-db-instance --db-instance-identifier " + input.asset.db_identifier + " --no-publicly-accessible --apply-immediately",
+		"remediation": sprintf("aws rds modify-db-instance --db-instance-identifier %v --no-publicly-accessible --apply-immediately", [input.asset.db_identifier]),
 	}
 }
 
-severity_rds_public := "CRITICAL" {
-	input.asset.tags["environment"] == "production"
+severity_rds_public := "CRITICAL" if {
+	input.asset.tags.environment == "production"
 } else := "HIGH"
 
 # ---------------------------------------------------------------------------
 # RDS storage encryption
 # ---------------------------------------------------------------------------
-deny[msg] {
+deny contains msg if {
 	input.asset.asset_type == "rds_instance"
 	not input.asset.storage_encrypted
 	msg := {
@@ -49,14 +49,14 @@ deny[msg] {
 	}
 }
 
-severity_rds_encryption := "HIGH" {
-	input.asset.tags["environment"] == "production"
+severity_rds_encryption := "HIGH" if {
+	input.asset.tags.environment == "production"
 } else := "MEDIUM"
 
 # ---------------------------------------------------------------------------
 # RDS Multi-AZ
 # ---------------------------------------------------------------------------
-deny[msg] {
+deny contains msg if {
 	input.asset.asset_type == "rds_instance"
 	not input.asset.multi_az
 	msg := {
@@ -67,14 +67,14 @@ deny[msg] {
 		"section": "4 Database Services",
 		"status": "FAIL",
 		"compliance": ["CIS 4.3.3", "RBI"],
-		"remediation": "aws rds modify-db-instance --db-instance-identifier " + input.asset.db_identifier + " --multi-az --apply-immediately",
+		"remediation": sprintf("aws rds modify-db-instance --db-instance-identifier %v --multi-az --apply-immediately", [input.asset.db_identifier]),
 	}
 }
 
 # ---------------------------------------------------------------------------
 # RDS deletion protection
 # ---------------------------------------------------------------------------
-deny[msg] {
+deny contains msg if {
 	input.asset.asset_type == "rds_instance"
 	not input.asset.deletion_protection
 	msg := {
@@ -85,14 +85,14 @@ deny[msg] {
 		"section": "4 Database Services",
 		"status": "FAIL",
 		"compliance": ["CIS 4.3.4", "CERT-In 2022"],
-		"remediation": "aws rds modify-db-instance --db-instance-identifier " + input.asset.db_identifier + " --deletion-protection --apply-immediately",
+		"remediation": sprintf("aws rds modify-db-instance --db-instance-identifier %v --deletion-protection --apply-immediately", [input.asset.db_identifier]),
 	}
 }
 
 # ---------------------------------------------------------------------------
 # RDS backup retention (minimum 1 day for automated backups)
 # ---------------------------------------------------------------------------
-deny[msg] {
+deny contains msg if {
 	input.asset.asset_type == "rds_instance"
 	input.asset.backup_retention == 0
 	msg := {
@@ -103,14 +103,14 @@ deny[msg] {
 		"section": "4 Database Services",
 		"status": "FAIL",
 		"compliance": ["CIS 4.3.5", "RBI", "DPDP 2023"],
-		"remediation": "aws rds modify-db-instance --db-instance-identifier " + input.asset.db_identifier + " --backup-retention-period 7 --apply-immediately",
+		"remediation": sprintf("aws rds modify-db-instance --db-instance-identifier %v --backup-retention-period 7 --apply-immediately", [input.asset.db_identifier]),
 	}
 }
 
 # ---------------------------------------------------------------------------
 # RDS auto minor version upgrade
 # ---------------------------------------------------------------------------
-deny[msg] {
+deny contains msg if {
 	input.asset.asset_type == "rds_instance"
 	not input.asset.auto_minor_upgrade
 	msg := {
@@ -121,7 +121,7 @@ deny[msg] {
 		"section": "4 Database Services",
 		"status": "FAIL",
 		"compliance": ["CIS 4.3.6", "CERT-In 2022"],
-		"remediation": "aws rds modify-db-instance --db-instance-identifier " + input.asset.db_identifier + " --auto-minor-version-upgrade --apply-immediately",
+		"remediation": sprintf("aws rds modify-db-instance --db-instance-identifier %v --auto-minor-version-upgrade --apply-immediately", [input.asset.db_identifier]),
 	}
 }
 
@@ -129,7 +129,7 @@ deny[msg] {
 # RDS in VPC (subnet group present)
 # Fires when input_builder sets inside_vpc to false (e.g. from missing DBSubnetGroup or VpcSecurityGroups).
 # ---------------------------------------------------------------------------
-deny[msg] {
+deny contains msg if {
 	input.asset.asset_type == "rds_instance"
 	input.asset.inside_vpc == false
 	msg := {
@@ -140,6 +140,6 @@ deny[msg] {
 		"section": "4 Database Services",
 		"status": "FAIL",
 		"compliance": ["CIS 4.3.7", "CERT-In 2022"],
-		"remediation": "aws rds modify-db-instance --db-instance-identifier " + input.asset.db_identifier + " --db-subnet-group-name <subnet_group> --apply-immediately",
+		"remediation": sprintf("aws rds modify-db-instance --db-instance-identifier %v --db-subnet-group-name <subnet_group> --apply-immediately", [input.asset.db_identifier]),
 	}
 }

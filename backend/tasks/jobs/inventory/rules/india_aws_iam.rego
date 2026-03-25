@@ -3,14 +3,14 @@
 
 package cloudsecure.rules.india_aws_iam
 
-import future.keywords.in
+import rego.v1
 
-default allow = true
+default allow := true
 
 # ---------------------------------------------------------------------------
 # CERT-In 2022: MFA for console users
 # ---------------------------------------------------------------------------
-deny[msg] {
+deny contains msg if {
 	input.asset.asset_type == "iam_user"
 	input.asset.has_console_password
 	not input.asset.mfa_enabled
@@ -29,7 +29,7 @@ deny[msg] {
 # ---------------------------------------------------------------------------
 # DPDP: Role assumption without MFA for sensitive roles
 # ---------------------------------------------------------------------------
-deny[msg] {
+deny contains msg if {
 	input.asset.asset_type == "iam_role"
 	not input.asset.requires_mfa
 	input.asset.role_sensitive
@@ -48,7 +48,7 @@ deny[msg] {
 # ---------------------------------------------------------------------------
 # CERT-In: Overly permissive trust policy
 # ---------------------------------------------------------------------------
-deny[msg] {
+deny contains msg if {
 	input.asset.asset_type == "iam_role"
 	input.asset.trust_policy_public_or_cross_account
 	msg := {

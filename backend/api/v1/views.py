@@ -282,7 +282,23 @@ class ProviderFindingsListView(APIView):
         resource_type_filter = request.query_params.get("resource_type")
         if resource_type_filter:
             qs = qs.filter(resource_type=resource_type_filter)
+
         qs = qs.order_by("-last_seen")
+
+        # Optional: filter by compliance framework/category keyword (CIS/DPDP/RBI/SBE).
+        # We match by substring against the JSON list `compliance_frameworks`.
+        framework_filter = request.query_params.get("framework")
+        if framework_filter:
+            wanted = framework_filter.strip().upper()
+            # Paginate after conversion to list to keep filtering logic simple/reliable.
+            qs = [
+                f
+                for f in qs
+                if any(
+                    wanted in str(item).upper()
+                    for item in (f.compliance_frameworks or [])
+                )
+            ]
 
         from rest_framework.pagination import PageNumberPagination
         paginator = PageNumberPagination()

@@ -75,7 +75,17 @@ export default function RulesViolatedTable({
                   </td>
                   <td className="whitespace-nowrap px-4 py-3 text-xs text-slate-600">{f.resource_type}</td>
                   <td className="px-4 py-3 text-xs text-slate-600">
-                    {Array.isArray(f.compliance_frameworks) ? f.compliance_frameworks.slice(0, 3).join(", ") : "—"}
+                    <span
+                      title={
+                        Array.isArray(f.compliance_frameworks)
+                          ? f.compliance_frameworks.join(", ")
+                          : ""
+                      }
+                    >
+                      {Array.isArray(f.compliance_frameworks)
+                        ? f.compliance_frameworks.join(", ")
+                        : "—"}
+                    </span>
                   </td>
                   <td className="whitespace-nowrap px-4 py-3 text-xs text-slate-500">
                     {f.first_seen ? new Date(f.first_seen).toLocaleDateString() : "—"}

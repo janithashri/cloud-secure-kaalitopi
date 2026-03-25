@@ -3,14 +3,14 @@
 
 package cloudsecure.rules.india_aws_rds
 
-import future.keywords.in
+import rego.v1
 
-default allow = true
+default allow := true
 
 # ---------------------------------------------------------------------------
 # DPDP / CERT-In: RDS publicly accessible
 # ---------------------------------------------------------------------------
-deny[msg] {
+deny contains msg if {
 	input.asset.asset_type == "rds_instance"
 	input.asset.publicly_accessible == true
 	msg := {
@@ -21,14 +21,14 @@ deny[msg] {
 		"section": "Section 8 - Security",
 		"status": "FAIL",
 		"compliance": ["DPDP 2023 S.8", "CERT-In 2022", "RBI"],
-		"remediation": "aws rds modify-db-instance --db-instance-identifier " + input.asset.db_identifier + " --no-publicly-accessible --apply-immediately",
+		"remediation": sprintf("aws rds modify-db-instance --db-instance-identifier %v --no-publicly-accessible --apply-immediately", [input.asset.db_identifier]),
 	}
 }
 
 # ---------------------------------------------------------------------------
 # RBI / DPDP: Storage encryption
 # ---------------------------------------------------------------------------
-deny[msg] {
+deny contains msg if {
 	input.asset.asset_type == "rds_instance"
 	not input.asset.storage_encrypted
 	msg := {
@@ -46,7 +46,7 @@ deny[msg] {
 # ---------------------------------------------------------------------------
 # CERT-In: Deletion protection
 # ---------------------------------------------------------------------------
-deny[msg] {
+deny contains msg if {
 	input.asset.asset_type == "rds_instance"
 	not input.asset.deletion_protection
 	msg := {
@@ -57,14 +57,14 @@ deny[msg] {
 		"section": "Incident Prevention",
 		"status": "FAIL",
 		"compliance": ["CERT-In 2022", "RBI"],
-		"remediation": "aws rds modify-db-instance --db-instance-identifier " + input.asset.db_identifier + " --deletion-protection --apply-immediately",
+		"remediation": sprintf("aws rds modify-db-instance --db-instance-identifier %v --deletion-protection --apply-immediately", [input.asset.db_identifier]),
 	}
 }
 
 # ---------------------------------------------------------------------------
 # RBI: Backup retention
 # ---------------------------------------------------------------------------
-deny[msg] {
+deny contains msg if {
 	input.asset.asset_type == "rds_instance"
 	input.asset.backup_retention == 0
 	msg := {
@@ -75,14 +75,14 @@ deny[msg] {
 		"section": "Backup and Recovery",
 		"status": "FAIL",
 		"compliance": ["RBI", "DPDP 2023", "CERT-In 2022"],
-		"remediation": "aws rds modify-db-instance --db-instance-identifier " + input.asset.db_identifier + " --backup-retention-period 7 --apply-immediately",
+		"remediation": sprintf("aws rds modify-db-instance --db-instance-identifier %v --backup-retention-period 7 --apply-immediately", [input.asset.db_identifier]),
 	}
 }
 
 # ---------------------------------------------------------------------------
 # RDS in VPC
 # ---------------------------------------------------------------------------
-deny[msg] {
+deny contains msg if {
 	input.asset.asset_type == "rds_instance"
 	input.asset.inside_vpc == false
 	msg := {

@@ -12,6 +12,20 @@ from .opa_client import evaluate
 logger = logging.getLogger(__name__)
 
 PACKAGE_MAP = {
+    # Resource Explorer (and current inventory pipeline) stores simplified
+    # type keys like `ec2:security-group` / `iam:user` rather than CFN types.
+    "ec2:security-group": [
+        "cloudsecure.rules.cis_aws_ec2",
+        "cloudsecure.rules.india_aws_ec2",
+    ],
+    "iam:user": [
+        "cloudsecure.rules.cis_aws_iam",
+        "cloudsecure.rules.india_aws_iam",
+    ],
+    "iam:role": [
+        "cloudsecure.rules.cis_aws_iam",
+        "cloudsecure.rules.india_aws_iam",
+    ],
     "AWS::S3::Bucket": [
         "cloudsecure.rules.cis_aws_s3",
         "cloudsecure.rules.india_aws_s3",

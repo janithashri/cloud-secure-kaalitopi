@@ -8,6 +8,11 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 ASSET_TYPE_MAP = {
+    # Resource Explorer (and current inventory pipeline) stores a simplified
+    # type key like `ec2:security-group` / `iam:user`, not full CFN types.
+    "ec2:security-group": "security_group",
+    "iam:user": "iam_user",
+    "iam:role": "iam_role",
     "AWS::IAM::Role": "iam_role",
     "AWS::IAM::User": "iam_user",
     "AWS::S3::Bucket": "s3_bucket",

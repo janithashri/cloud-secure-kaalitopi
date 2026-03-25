@@ -4,15 +4,15 @@
 
 package cloudsecure.rules.cis_aws_iam
 
-import future.keywords.in
+import rego.v1
 
-default allow = true
+default allow := true
 
 # ---------------------------------------------------------------------------
 # CIS 1.10: IAM user with console password must have MFA
 # Real-world impact: Account takeover via stolen or phished passwords; MFA drastically reduces risk.
 # ---------------------------------------------------------------------------
-deny[msg] {
+deny contains msg if {
 	input.asset.asset_type == "iam_user"
 	input.asset.has_console_password
 	not input.asset.mfa_enabled
@@ -24,19 +24,19 @@ deny[msg] {
 		"section": "1 Identity and Access Management",
 		"status": "FAIL",
 		"compliance": ["CIS 1.10", "CERT-In 2022"],
-		"remediation": "Enable MFA in AWS Console: IAM > Users > " + input.asset.user_name + " > Security credentials > Assign MFA device. Or remove console password: aws iam delete-login-profile --user-name " + input.asset.user_name,
+		"remediation": sprintf("Enable MFA in AWS Console: IAM > Users > %v > Security credentials > Assign MFA device. Or remove console password: aws iam delete-login-profile --user-name %v", [input.asset.user_name, input.asset.user_name]),
 	}
 }
 
-severity_mfa := "HIGH" {
-	input.asset.tags["admin"] == "true"
+severity_mfa := "HIGH" if {
+	input.asset.tags.admin == "true"
 } else := "MEDIUM"
 
 # ---------------------------------------------------------------------------
 # CIS 1.15: Permissions only through groups (no inline or direct attach on user)
 # INGESTION GAP: fetcher may not expose attached managed policies; use inline_policies only for now.
 # ---------------------------------------------------------------------------
-deny[msg] {
+deny contains msg if {
 	input.asset.asset_type == "iam_user"
 	count(input.asset.inline_policy_names) > 0
 	msg := {
@@ -54,7 +54,7 @@ deny[msg] {
 # ---------------------------------------------------------------------------
 # CIS 1.16: Role trust policy should require MFA for sensitive roles
 # ---------------------------------------------------------------------------
-deny[msg] {
+deny contains msg if {
 	input.asset.asset_type == "iam_role"
 	not input.asset.requires_mfa
 	input.asset.role_sensitive
@@ -73,7 +73,7 @@ deny[msg] {
 # ---------------------------------------------------------------------------
 # Role: overly permissive trust (Principal "*" or other account without condition)
 # ---------------------------------------------------------------------------
-deny[msg] {
+deny contains msg if {
 	input.asset.asset_type == "iam_role"
 	input.asset.trust_policy_public_or_cross_account
 	msg := {

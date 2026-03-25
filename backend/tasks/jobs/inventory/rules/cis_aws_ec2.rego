@@ -4,15 +4,15 @@
 
 package cloudsecure.rules.cis_aws_ec2
 
-import future.keywords.in
+import rego.v1
 
-default allow = true
+default allow := true
 
 # ---------------------------------------------------------------------------
 # Security group: all ports open to 0.0.0.0/0 or ::/0
 # Real-world impact: Wide-open SGs are the primary vector for brute-force and ransomware.
 # ---------------------------------------------------------------------------
-deny[msg] {
+deny contains msg if {
 	input.asset.asset_type == "security_group"
 	input.asset.allows_all_ingress
 	msg := {
@@ -23,18 +23,18 @@ deny[msg] {
 		"section": "4 Networking",
 		"status": "FAIL",
 		"compliance": ["CIS 4.1", "CERT-In 2022", "DPDP 2023"],
-		"remediation": "Revoke overly permissive rules: aws ec2 revoke-security-group-ingress --group-id " + input.asset.group_id + " --protocol all --cidr 0.0.0.0/0 (and ::/0 if present)",
+		"remediation": sprintf("Revoke overly permissive rules: aws ec2 revoke-security-group-ingress --group-id %v --protocol all --cidr 0.0.0.0/0 (and ::/0 if present)", [input.asset.group_id]),
 	}
 }
 
-severity_sg_open := "CRITICAL" {
-	input.asset.tags["environment"] == "production"
+severity_sg_open := "CRITICAL" if {
+	input.asset.tags.environment == "production"
 } else := "HIGH"
 
 # ---------------------------------------------------------------------------
 # SSH (port 22) from internet
 # ---------------------------------------------------------------------------
-deny[msg] {
+deny contains msg if {
 	input.asset.asset_type == "security_group"
 	input.asset.allows_ssh
 	msg := {
@@ -45,14 +45,14 @@ deny[msg] {
 		"section": "4 Networking",
 		"status": "FAIL",
 		"compliance": ["CIS 4.1.2", "CERT-In 2022"],
-		"remediation": "aws ec2 revoke-security-group-ingress --group-id " + input.asset.group_id + " --protocol tcp --port 22 --cidr 0.0.0.0/0",
+		"remediation": sprintf("aws ec2 revoke-security-group-ingress --group-id %v --protocol tcp --port 22 --cidr 0.0.0.0/0", [input.asset.group_id]),
 	}
 }
 
 # ---------------------------------------------------------------------------
 # RDP (port 3389) from internet
 # ---------------------------------------------------------------------------
-deny[msg] {
+deny contains msg if {
 	input.asset.asset_type == "security_group"
 	input.asset.allows_rdp
 	msg := {
@@ -63,14 +63,14 @@ deny[msg] {
 		"section": "4 Networking",
 		"status": "FAIL",
 		"compliance": ["CIS 4.1.3", "CERT-In 2022"],
-		"remediation": "aws ec2 revoke-security-group-ingress --group-id " + input.asset.group_id + " --protocol tcp --port 3389 --cidr 0.0.0.0/0",
+		"remediation": sprintf("aws ec2 revoke-security-group-ingress --group-id %v --protocol tcp --port 3389 --cidr 0.0.0.0/0", [input.asset.group_id]),
 	}
 }
 
 # ---------------------------------------------------------------------------
 # Default security group should not allow traffic
 # ---------------------------------------------------------------------------
-deny[msg] {
+deny contains msg if {
 	input.asset.asset_type == "security_group"
 	input.asset.group_name == "default"
 	count(input.asset.inbound_rules) > 0
@@ -90,7 +90,7 @@ deny[msg] {
 # EC2 instance: IMDSv2 required (metadata service)
 # Real-world impact: IMDSv1 allows SSRF and credential theft; IMDSv2 requires session-oriented requests.
 # ---------------------------------------------------------------------------
-deny[msg] {
+deny contains msg if {
 	input.asset.asset_type == "ec2_instance"
 	not input.asset.imdsv2_required
 	msg := {
@@ -101,14 +101,14 @@ deny[msg] {
 		"section": "4 Networking",
 		"status": "FAIL",
 		"compliance": ["CIS 4.1.4", "CERT-In 2022"],
-		"remediation": "aws ec2 modify-instance-metadata-options --instance-id " + input.asset.instance_id + " --http-tokens required --http-put-response-hop-limit 2",
+		"remediation": sprintf("aws ec2 modify-instance-metadata-options --instance-id %v --http-tokens required --http-put-response-hop-limit 2", [input.asset.instance_id]),
 	}
 }
 
 # ---------------------------------------------------------------------------
 # EC2 instance: public IP on instance
 # ---------------------------------------------------------------------------
-deny[msg] {
+deny contains msg if {
 	input.asset.asset_type == "ec2_instance"
 	input.asset.has_public_ip
 	msg := {
@@ -123,14 +123,14 @@ deny[msg] {
 	}
 }
 
-severity_public_ip := "HIGH" {
-	input.asset.tags["environment"] == "production"
+severity_public_ip := "HIGH" if {
+	input.asset.tags.environment == "production"
 } else := "MEDIUM"
 
 # ---------------------------------------------------------------------------
 # EC2 instance: no IAM instance profile
 # ---------------------------------------------------------------------------
-deny[msg] {
+deny contains msg if {
 	input.asset.asset_type == "ec2_instance"
 	not input.asset.iam_instance_profile_attached
 	msg := {
@@ -141,14 +141,14 @@ deny[msg] {
 		"section": "4 Networking",
 		"status": "FAIL",
 		"compliance": ["CIS 4.1.6", "CERT-In 2022"],
-		"remediation": "aws ec2 associate-iam-instance-profile --instance-id " + input.asset.instance_id + " --iam-instance-profile Name=<PROFILE_NAME>",
+		"remediation": sprintf("aws ec2 associate-iam-instance-profile --instance-id %v --iam-instance-profile Name=<PROFILE_NAME>", [input.asset.instance_id]),
 	}
 }
 
 # ---------------------------------------------------------------------------
 # High-risk TCP ports from internet (3306, 5432, 6379, 1433, 27017, etc.)
 # ---------------------------------------------------------------------------
-deny[msg] {
+deny contains msg if {
 	input.asset.asset_type == "security_group"
 	input.asset.allows_high_risk_ports
 	msg := {
@@ -166,7 +166,7 @@ deny[msg] {
 # ---------------------------------------------------------------------------
 # Unrestricted outbound (optional — often required for updates)
 # ---------------------------------------------------------------------------
-deny[msg] {
+deny contains msg if {
 	input.asset.asset_type == "security_group"
 	input.asset.allows_all_egress
 	msg := {

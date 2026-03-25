@@ -211,7 +211,9 @@ def has_config_drifted(arn: str, new_config: dict, previous_hashes: dict) -> tup
 
 def run_inventory_pull(tenant_id: int, provider_id: int, run) -> dict:
     from providers.models import Provider
+    from accounts.models import Tenant
 
+    tenant = Tenant.objects.get(id=tenant_id)
     provider = Provider.objects.get(id=provider_id)
     account_id = provider.aws_account_id
     role_name = provider.inventory_role_name
@@ -223,6 +225,7 @@ def run_inventory_pull(tenant_id: int, provider_id: int, run) -> dict:
         "new": 0,
         "changed": 0,
         "deleted": 0,
+        "new_findings": 0,
         "successfully_fetched": 0,
         "fetch_failed": 0,
         "skipped_no_fetcher": 0,
@@ -239,12 +242,12 @@ def run_inventory_pull(tenant_id: int, provider_id: int, run) -> dict:
 
     for batch in stagger_accounts(accounts, batch_size=10, delay_seconds=180):
         for account in batch:
-            _process_account(account, role_name, neo4j_driver, stats)
+            _process_account(account, role_name, neo4j_driver, stats, tenant, provider, run)
 
     return stats
 
 
-def _process_account(account, role_name, neo4j_driver, stats):
+def _process_account(account, role_name, neo4j_driver, stats, tenant, provider, run):
     account_id = account.aws_account_id
     logger.info("Processing account %s", account_id)
 
@@ -334,6 +337,27 @@ def _process_account(account, role_name, neo4j_driver, stats):
                     "tags": resource_meta.get("tags", {}),
                 },
             )
+
+            # Evaluate Rego rules for this resource and persist findings.
+            # Never fail the inventory run if rule evaluation fails.
+            try:
+                from tasks.jobs.rule_engine.evaluator import evaluate_resource
+
+                new_findings = evaluate_resource(
+                    resource_type=resource_type,
+                    arn=arn,
+                    account_id=account_id,
+                    region=region,
+                    config=config,
+                    tags=resource_meta.get("tags", {}) or {},
+                    inventory_run=run,
+                    tenant_id=tenant.id,
+                    provider_id=provider.id,
+                )
+                stats["new_findings"] = stats.get("new_findings", 0) + new_findings
+            except Exception as e:
+                logger.error("Rule engine failed for %s: %s", arn, e)
+
             stats["successfully_fetched"] += 1
 
         except Exception as e:

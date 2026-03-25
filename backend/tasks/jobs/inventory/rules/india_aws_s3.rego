@@ -3,14 +3,14 @@
 
 package cloudsecure.rules.india_aws_s3
 
-import future.keywords.in
+import rego.v1
 
-default allow = true
+default allow := true
 
 # ---------------------------------------------------------------------------
 # DPDP Section 8: Block public access (data protection)
 # ---------------------------------------------------------------------------
-deny[msg] {
+deny contains msg if {
 	input.asset.asset_type == "s3_bucket"
 	not block_public_fully_enabled
 	msg := {
@@ -21,25 +21,25 @@ deny[msg] {
 		"section": "Section 8 - Security",
 		"status": "FAIL",
 		"compliance": ["DPDP 2023 S.8", "CERT-In 2022", "RBI"],
-		"remediation": "aws s3api put-public-access-block --bucket " + input.asset.bucket_name + " --public-access-block-configuration BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true",
+		"remediation": sprintf("aws s3api put-public-access-block --bucket %v --public-access-block-configuration BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true", [input.asset.bucket_name]),
 	}
 }
 
-block_public_fully_enabled {
+block_public_fully_enabled if {
 	input.asset.block_public_acls == true
 	input.asset.ignore_public_acls == true
 	input.asset.block_public_policy == true
 	input.asset.restrict_public_buckets == true
 }
 
-severity_india_public := "CRITICAL" {
-	input.asset.tags["environment"] == "production"
+severity_india_public := "CRITICAL" if {
+	input.asset.tags.environment == "production"
 } else := "HIGH"
 
 # ---------------------------------------------------------------------------
 # CERT-In 2022: Default encryption
 # ---------------------------------------------------------------------------
-deny[msg] {
+deny contains msg if {
 	input.asset.asset_type == "s3_bucket"
 	not input.asset.server_side_encryption_enabled
 	msg := {
@@ -50,14 +50,14 @@ deny[msg] {
 		"section": "Data Protection",
 		"status": "FAIL",
 		"compliance": ["CERT-In 2022", "DPDP 2023", "RBI"],
-		"remediation": "aws s3api put-bucket-encryption --bucket " + input.asset.bucket_name + " --server-side-encryption-configuration '{\"Rules\":[{\"ApplyServerSideEncryptionByDefault\":{\"SSEAlgorithm\":\"AES256\"}}]}'",
+		"remediation": sprintf("aws s3api put-bucket-encryption --bucket %v --server-side-encryption-configuration '{\"Rules\":[{\"ApplyServerSideEncryptionByDefault\":{\"SSEAlgorithm\":\"AES256\"}}]}'", [input.asset.bucket_name]),
 	}
 }
 
 # ---------------------------------------------------------------------------
 # CERT-In: Access logging for audit trail
 # ---------------------------------------------------------------------------
-deny[msg] {
+deny contains msg if {
 	input.asset.asset_type == "s3_bucket"
 	not input.asset.access_logging_enabled
 	msg := {
@@ -68,14 +68,14 @@ deny[msg] {
 		"section": "Logging and Monitoring",
 		"status": "FAIL",
 		"compliance": ["CERT-In 2022", "DPDP 2023"],
-		"remediation": "aws s3api put-bucket-logging --bucket " + input.asset.bucket_name + " --bucket-logging-status '{\"LoggingEnabled\":{\"TargetBucket\":\"<LOG_BUCKET>\",\"TargetPrefix\":\"logs/\"}}'",
+		"remediation": sprintf("aws s3api put-bucket-logging --bucket %v --bucket-logging-status '{\"LoggingEnabled\":{\"TargetBucket\":\"<LOG_BUCKET>\",\"TargetPrefix\":\"logs/\"}}'", [input.asset.bucket_name]),
 	}
 }
 
 # ---------------------------------------------------------------------------
 # RBI / DPDP: Cross-account policy
 # ---------------------------------------------------------------------------
-deny[msg] {
+deny contains msg if {
 	input.asset.asset_type == "s3_bucket"
 	input.asset.has_cross_account_policy
 	msg := {
@@ -93,7 +93,7 @@ deny[msg] {
 # ---------------------------------------------------------------------------
 # Public access (compound)
 # ---------------------------------------------------------------------------
-deny[msg] {
+deny contains msg if {
 	input.asset.asset_type == "s3_bucket"
 	input.asset.is_public
 	msg := {

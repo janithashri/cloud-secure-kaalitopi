@@ -4,16 +4,16 @@
 
 package cloudsecure.rules.cis_aws_s3
 
-import future.keywords.in
+import rego.v1
 
-default allow = true
+default allow := true
 
 # ---------------------------------------------------------------------------
 # CIS 2.1.1 / 2.1.4 — Block Public Access (bucket-level)
 # Real-world impact: Public S3 buckets are the #1 cause of AWS data breaches
 # (e.g. Capital One 2019). Block Public Access prevents accidental public ACLs/policies.
 # ---------------------------------------------------------------------------
-deny[msg] {
+deny contains msg if {
 	input.asset.asset_type == "s3_bucket"
 	not block_public_fully_enabled
 	msg := {
@@ -24,26 +24,26 @@ deny[msg] {
 		"section": "2 Storage Services – S3",
 		"status": "FAIL",
 		"compliance": ["CIS 2.1.4", "CIS 2.1.1", "DPDP 2023 S.8", "CERT-In 2022"],
-		"remediation": "Enable Block Public Access: aws s3api put-public-access-block --bucket " + input.asset.bucket_name + " --public-access-block-configuration BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true",
+		"remediation": sprintf("Enable Block Public Access: aws s3api put-public-access-block --bucket %v --public-access-block-configuration BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true", [input.asset.bucket_name]),
 	}
 }
 
-block_public_fully_enabled {
+block_public_fully_enabled if {
 	input.asset.block_public_acls == true
 	input.asset.ignore_public_acls == true
 	input.asset.block_public_policy == true
 	input.asset.restrict_public_buckets == true
 }
 
-severity_bucket_public := "CRITICAL" {
-	input.asset.tags["environment"] == "production"
+severity_bucket_public := "CRITICAL" if {
+	input.asset.tags.environment == "production"
 } else := "HIGH"
 
 # ---------------------------------------------------------------------------
 # CIS 2.1.1 — Secure transport (HTTPS only)
 # Real-world impact: HTTP allows eavesdropping and token theft; pre-signed URLs can be replayed.
 # ---------------------------------------------------------------------------
-deny[msg] {
+deny contains msg if {
 	input.asset.asset_type == "s3_bucket"
 	not input.asset.secure_transport_policy
 	msg := {
@@ -54,7 +54,7 @@ deny[msg] {
 		"section": "2 Storage Services – S3",
 		"status": "FAIL",
 		"compliance": ["CIS 2.1.1", "DPDP 2023", "CERT-In 2022"],
-		"remediation": "aws s3api put-bucket-policy --bucket " + input.asset.bucket_name + " --policy '{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Deny\",\"Principal\":\"*\",\"Action\":\"s3:*\",\"Resource\":\"arn:aws:s3:::" + input.asset.bucket_name + "/*\",\"Condition\":{\"Bool\":{\"aws:SecureTransport\":\"false\"}}}]}'",
+		"remediation": sprintf("aws s3api put-bucket-policy --bucket %v --policy '{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Deny\",\"Principal\":\"*\",\"Action\":\"s3:*\",\"Resource\":\"arn:aws:s3:::%v/*\",\"Condition\":{\"Bool\":{\"aws:SecureTransport\":\"false\"}}}]}'", [input.asset.bucket_name, input.asset.bucket_name]),
 	}
 }
 
@@ -64,7 +64,7 @@ deny[msg] {
 # Rule fires when fetcher provides mfa_delete_enabled and it is false.
 # Enhancement needed in: tasks/jobs/inventory/fetchers/s3.py (get_bucket_versioning returns MfaDelete).
 # ---------------------------------------------------------------------------
-deny[msg] {
+deny contains msg if {
 	input.asset.asset_type == "s3_bucket"
 	input.asset.versioning_enabled == true
 	input.asset.mfa_delete_enabled == false
@@ -76,7 +76,7 @@ deny[msg] {
 		"section": "2 Storage Services – S3",
 		"status": "FAIL",
 		"compliance": ["CIS 2.1.2", "CERT-In 2022"],
-		"remediation": "Enable MFA Delete (root only): aws s3api put-bucket-versioning --bucket " + input.asset.bucket_name + " --versioning-configuration Status=Enabled,MFADelete=Enabled --mfa \"<MFA_SERIAL> <MFA_CODE>\"",
+		"remediation": sprintf("Enable MFA Delete (root only): aws s3api put-bucket-versioning --bucket %v --versioning-configuration Status=Enabled,MFADelete=Enabled --mfa \"<MFA_SERIAL> <MFA_CODE>\"", [input.asset.bucket_name]),
 	}
 }
 
@@ -84,7 +84,7 @@ deny[msg] {
 # CIS 2.1.x — Server access logging
 # Real-world impact: Without logging, exfiltration and policy changes are hard to detect.
 # ---------------------------------------------------------------------------
-deny[msg] {
+deny contains msg if {
 	input.asset.asset_type == "s3_bucket"
 	not input.asset.access_logging_enabled
 	msg := {
@@ -95,18 +95,18 @@ deny[msg] {
 		"section": "2 Storage Services – S3",
 		"status": "FAIL",
 		"compliance": ["CIS 2.1.5", "CERT-In 2022", "DPDP 2023"],
-		"remediation": "aws s3api put-bucket-logging --bucket " + input.asset.bucket_name + " --bucket-logging-status '{\"LoggingEnabled\":{\"TargetBucket\":\"<LOG_BUCKET>\",\"TargetPrefix\":\"logs/\"}}'",
+		"remediation": sprintf("aws s3api put-bucket-logging --bucket %v --bucket-logging-status '{\"LoggingEnabled\":{\"TargetBucket\":\"<LOG_BUCKET>\",\"TargetPrefix\":\"logs/\"}}'", [input.asset.bucket_name]),
 	}
 }
 
-severity_logging := "HIGH" {
+severity_logging := "HIGH" if {
 	input.asset.is_public
 } else := "MEDIUM"
 
 # ---------------------------------------------------------------------------
 # CIS 2.1.6 — Default encryption (SSE)
 # ---------------------------------------------------------------------------
-deny[msg] {
+deny contains msg if {
 	input.asset.asset_type == "s3_bucket"
 	not input.asset.server_side_encryption_enabled
 	msg := {
@@ -117,18 +117,18 @@ deny[msg] {
 		"section": "2 Storage Services – S3",
 		"status": "FAIL",
 		"compliance": ["CIS 2.1.6", "DPDP 2023", "RBI", "CERT-In 2022"],
-		"remediation": "aws s3api put-bucket-encryption --bucket " + input.asset.bucket_name + " --server-side-encryption-configuration '{\"Rules\":[{\"ApplyServerSideEncryptionByDefault\":{\"SSEAlgorithm\":\"AES256\"}}]}'",
+		"remediation": sprintf("aws s3api put-bucket-encryption --bucket %v --server-side-encryption-configuration '{\"Rules\":[{\"ApplyServerSideEncryptionByDefault\":{\"SSEAlgorithm\":\"AES256\"}}]}'", [input.asset.bucket_name]),
 	}
 }
 
-severity_encryption := "HIGH" {
-	input.asset.tags["data_classification"] == "confidential"
+severity_encryption := "HIGH" if {
+	input.asset.tags.data_classification == "confidential"
 } else := "MEDIUM"
 
 # ---------------------------------------------------------------------------
 # Object versioning — recovery and integrity
 # ---------------------------------------------------------------------------
-deny[msg] {
+deny contains msg if {
 	input.asset.asset_type == "s3_bucket"
 	not input.asset.versioning_enabled
 	msg := {
@@ -139,14 +139,14 @@ deny[msg] {
 		"section": "2 Storage Services – S3",
 		"status": "FAIL",
 		"compliance": ["CIS 2.1.7", "DPDP 2023"],
-		"remediation": "aws s3api put-bucket-versioning --bucket " + input.asset.bucket_name + " --versioning-configuration Status=Enabled",
+		"remediation": sprintf("aws s3api put-bucket-versioning --bucket %v --versioning-configuration Status=Enabled", [input.asset.bucket_name]),
 	}
 }
 
 # ---------------------------------------------------------------------------
 # Public access (compound: any block setting false or public ACL/policy)
 # ---------------------------------------------------------------------------
-deny[msg] {
+deny contains msg if {
 	input.asset.asset_type == "s3_bucket"
 	input.asset.is_public
 	msg := {
@@ -157,18 +157,18 @@ deny[msg] {
 		"section": "2 Storage Services – S3",
 		"status": "FAIL",
 		"compliance": ["CIS 2.1.4", "DPDP 2023 S.8", "CERT-In 2022"],
-		"remediation": "Enable Block Public Access: aws s3api put-public-access-block --bucket " + input.asset.bucket_name + " --public-access-block-configuration BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true",
+		"remediation": sprintf("Enable Block Public Access: aws s3api put-public-access-block --bucket %v --public-access-block-configuration BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true", [input.asset.bucket_name]),
 	}
 }
 
-severity_public := "CRITICAL" {
-	input.asset.tags["environment"] == "production"
+severity_public := "CRITICAL" if {
+	input.asset.tags.environment == "production"
 } else := "HIGH"
 
 # ---------------------------------------------------------------------------
 # Cross-account policy — restrict to same account unless intended
 # ---------------------------------------------------------------------------
-deny[msg] {
+deny contains msg if {
 	input.asset.asset_type == "s3_bucket"
 	input.asset.has_cross_account_policy
 	msg := {
@@ -186,12 +186,12 @@ deny[msg] {
 # ---------------------------------------------------------------------------
 # Prefer KMS for sensitive data (optional / informational)
 # ---------------------------------------------------------------------------
-deny[msg] {
+deny contains msg if {
 	input.asset.asset_type == "s3_bucket"
 	input.asset.server_side_encryption_enabled
 	input.asset.encryption_type != "aws:kms"
 	input.asset.encryption_type != "aws:kms:dsse"
-	input.asset.tags["data_classification"] == "confidential"
+	input.asset.tags.data_classification == "confidential"
 	msg := {
 		"rule_id": "CIS-2.1.6-KMS",
 		"issue": sprintf("S3 bucket '%v' with confidential data uses SSE-S3 instead of SSE-KMS — prefer KMS for key control and audit", [input.asset.bucket_name]),
@@ -200,6 +200,6 @@ deny[msg] {
 		"section": "2 Storage Services – S3",
 		"status": "FAIL",
 		"compliance": ["CIS 2.1.6", "RBI", "DPDP 2023"],
-		"remediation": "aws s3api put-bucket-encryption --bucket " + input.asset.bucket_name + " --server-side-encryption-configuration '{\"Rules\":[{\"ApplyServerSideEncryptionByDefault\":{\"SSEAlgorithm\":\"aws:kms\"}}]}'",
+		"remediation": sprintf("aws s3api put-bucket-encryption --bucket %v --server-side-encryption-configuration '{\"Rules\":[{\"ApplyServerSideEncryptionByDefault\":{\"SSEAlgorithm\":\"aws:kms\"}}]}'", [input.asset.bucket_name]),
 	}
 }

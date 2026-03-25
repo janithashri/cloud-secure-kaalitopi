@@ -4,15 +4,15 @@
 
 package cloudsecure.rules.cis_aws_cloudtrail
 
-import future.keywords.in
+import rego.v1
 
-default allow = true
+default allow := true
 
 # ---------------------------------------------------------------------------
 # Multi-region trail with logging enabled
 # Real-world impact: Single-region trails miss events in other regions; critical for incident response.
 # ---------------------------------------------------------------------------
-deny[msg] {
+deny contains msg if {
 	input.asset.asset_type == "cloudtrail_trail"
 	not input.asset.is_multi_region
 	msg := {
@@ -23,11 +23,11 @@ deny[msg] {
 		"section": "3 Logging",
 		"status": "FAIL",
 		"compliance": ["CIS 3.1", "CERT-In 2022"],
-		"remediation": "Create or update trail to be multi-region: aws cloudtrail update-trail --name " + input.asset.name + " --is-multi-region-trail",
+		"remediation": sprintf("Create or update trail to be multi-region: aws cloudtrail update-trail --name %v --is-multi-region-trail", [input.asset.name]),
 	}
 }
 
-deny[msg] {
+deny contains msg if {
 	input.asset.asset_type == "cloudtrail_trail"
 	not input.asset.is_logging
 	msg := {
@@ -38,14 +38,14 @@ deny[msg] {
 		"section": "3 Logging",
 		"status": "FAIL",
 		"compliance": ["CIS 3.1", "CERT-In 2022", "DPDP 2023"],
-		"remediation": "aws cloudtrail start-logging --name " + input.asset.name,
+		"remediation": sprintf("aws cloudtrail start-logging --name %v", [input.asset.name]),
 	}
 }
 
 # ---------------------------------------------------------------------------
 # Log file validation
 # ---------------------------------------------------------------------------
-deny[msg] {
+deny contains msg if {
 	input.asset.asset_type == "cloudtrail_trail"
 	not input.asset.log_file_validation_enabled
 	msg := {
@@ -56,14 +56,14 @@ deny[msg] {
 		"section": "3 Logging",
 		"status": "FAIL",
 		"compliance": ["CIS 3.2", "CERT-In 2022"],
-		"remediation": "aws cloudtrail update-trail --name " + input.asset.name + " --enable-log-file-validation",
+		"remediation": sprintf("aws cloudtrail update-trail --name %v --enable-log-file-validation", [input.asset.name]),
 	}
 }
 
 # ---------------------------------------------------------------------------
 # KMS encryption for logs
 # ---------------------------------------------------------------------------
-deny[msg] {
+deny contains msg if {
 	input.asset.asset_type == "cloudtrail_trail"
 	not input.asset.kms_encryption_enabled
 	msg := {
@@ -74,7 +74,7 @@ deny[msg] {
 		"section": "3 Logging",
 		"status": "FAIL",
 		"compliance": ["CIS 3.3", "CERT-In 2022", "RBI"],
-		"remediation": "aws cloudtrail update-trail --name " + input.asset.name + " --kms-key-id <kms_key_arn_or_alias>",
+		"remediation": sprintf("aws cloudtrail update-trail --name %v --kms-key-id <kms_key_arn_or_alias>", [input.asset.name]),
 	}
 }
 
@@ -82,7 +82,7 @@ deny[msg] {
 # S3 bucket for CloudTrail logs must not be public (handled by S3 rules when bucket is in scope)
 # Here we only flag if we have trail-level info about bucket public state.
 # ---------------------------------------------------------------------------
-deny[msg] {
+deny contains msg if {
 	input.asset.asset_type == "cloudtrail_trail"
 	input.asset.s3_bucket_public == true
 	msg := {
@@ -93,14 +93,14 @@ deny[msg] {
 		"section": "3 Logging",
 		"status": "FAIL",
 		"compliance": ["CIS 3.4", "CERT-In 2022", "DPDP 2023"],
-		"remediation": "aws s3api put-public-access-block --bucket " + input.asset.s3_bucket + " --public-access-block-configuration BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true",
+		"remediation": sprintf("aws s3api put-public-access-block --bucket %v --public-access-block-configuration BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true", [input.asset.s3_bucket]),
 	}
 }
 
 # ---------------------------------------------------------------------------
 # CloudWatch Logs integration
 # ---------------------------------------------------------------------------
-deny[msg] {
+deny contains msg if {
 	input.asset.asset_type == "cloudtrail_trail"
 	not input.asset.cloudwatch_logs_enabled
 	msg := {
@@ -111,6 +111,6 @@ deny[msg] {
 		"section": "3 Logging",
 		"status": "FAIL",
 		"compliance": ["CIS 3.5", "CERT-In 2022"],
-		"remediation": "aws cloudtrail update-trail --name " + input.asset.name + " --cloud-watch-logs-log-group-arn <log_group_arn> --cloud-watch-logs-role-arn <role_arn>",
+		"remediation": sprintf("aws cloudtrail update-trail --name %v --cloud-watch-logs-log-group-arn <log_group_arn> --cloud-watch-logs-role-arn <role_arn>", [input.asset.name]),
 	}
 }

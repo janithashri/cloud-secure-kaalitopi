@@ -3,14 +3,14 @@
 
 package cloudsecure.rules.india_aws_ec2
 
-import future.keywords.in
+import rego.v1
 
-default allow = true
+default allow := true
 
 # ---------------------------------------------------------------------------
 # CERT-In 2022: Unrestricted SSH/RDP from internet
 # ---------------------------------------------------------------------------
-deny[msg] {
+deny contains msg if {
 	input.asset.asset_type == "security_group"
 	input.asset.allows_ssh
 	msg := {
@@ -21,11 +21,11 @@ deny[msg] {
 		"section": "Network Security",
 		"status": "FAIL",
 		"compliance": ["CERT-In 2022", "DPDP 2023", "RBI"],
-		"remediation": "aws ec2 revoke-security-group-ingress --group-id " + input.asset.group_id + " --protocol tcp --port 22 --cidr 0.0.0.0/0",
+		"remediation": sprintf("aws ec2 revoke-security-group-ingress --group-id %v --protocol tcp --port 22 --cidr 0.0.0.0/0", [input.asset.group_id]),
 	}
 }
 
-deny[msg] {
+deny contains msg if {
 	input.asset.asset_type == "security_group"
 	input.asset.allows_rdp
 	msg := {
@@ -36,14 +36,14 @@ deny[msg] {
 		"section": "Network Security",
 		"status": "FAIL",
 		"compliance": ["CERT-In 2022", "DPDP 2023", "RBI"],
-		"remediation": "aws ec2 revoke-security-group-ingress --group-id " + input.asset.group_id + " --protocol tcp --port 3389 --cidr 0.0.0.0/0",
+		"remediation": sprintf("aws ec2 revoke-security-group-ingress --group-id %v --protocol tcp --port 3389 --cidr 0.0.0.0/0", [input.asset.group_id]),
 	}
 }
 
 # ---------------------------------------------------------------------------
 # DPDP / CERT-In: All ports open to internet
 # ---------------------------------------------------------------------------
-deny[msg] {
+deny contains msg if {
 	input.asset.asset_type == "security_group"
 	input.asset.allows_all_ingress
 	msg := {
@@ -61,7 +61,7 @@ deny[msg] {
 # ---------------------------------------------------------------------------
 # EC2 instance: public IP (data residency / exposure)
 # ---------------------------------------------------------------------------
-deny[msg] {
+deny contains msg if {
 	input.asset.asset_type == "ec2_instance"
 	input.asset.has_public_ip
 	msg := {
@@ -76,14 +76,14 @@ deny[msg] {
 	}
 }
 
-severity_india_public_ip := "HIGH" {
-	input.asset.tags["environment"] == "production"
+severity_india_public_ip := "HIGH" if {
+	input.asset.tags.environment == "production"
 } else := "MEDIUM"
 
 # ---------------------------------------------------------------------------
 # IMDSv2 (CERT-In: secure configuration)
 # ---------------------------------------------------------------------------
-deny[msg] {
+deny contains msg if {
 	input.asset.asset_type == "ec2_instance"
 	not input.asset.imdsv2_required
 	msg := {
@@ -94,14 +94,14 @@ deny[msg] {
 		"section": "Secure Configuration",
 		"status": "FAIL",
 		"compliance": ["CERT-In 2022", "DPDP 2023"],
-		"remediation": "aws ec2 modify-instance-metadata-options --instance-id " + input.asset.instance_id + " --http-tokens required --http-put-response-hop-limit 2",
+		"remediation": sprintf("aws ec2 modify-instance-metadata-options --instance-id %v --http-tokens required --http-put-response-hop-limit 2", [input.asset.instance_id]),
 	}
 }
 
 # ---------------------------------------------------------------------------
 # High-risk ports (DB/management) from internet — CERT-In
 # ---------------------------------------------------------------------------
-deny[msg] {
+deny contains msg if {
 	input.asset.asset_type == "security_group"
 	input.asset.allows_high_risk_ports
 	msg := {
