@@ -59,6 +59,29 @@ deny contains msg if {
 }
 
 # ---------------------------------------------------------------------------
+# DPDP / CERT-In: Default security group should be restricted
+# (Prowler-style mapping aligned to your CIS-4.2 trigger: default SG has inbound rules)
+# To avoid double-counting with DPDP-EC2-OPEN-SG, only trigger when we DON'T
+# already have "allows_all_ingress".
+# ---------------------------------------------------------------------------
+deny contains msg if {
+	input.asset.asset_type == "security_group"
+	input.asset.group_name == "default"
+	count(input.asset.inbound_rules) > 0
+	not input.asset.allows_all_ingress
+	msg := {
+		"rule_id": "DPDP-EC2-DEFAULT-SG-INBOUND",
+		"issue": sprintf("Default security group '%v' has inbound rules — violates DPDP/CERT-In expectations to restrict access", [input.asset.group_id]),
+		"severity": "HIGH",
+		"framework": "DPDP Act 2023",
+		"section": "Section 8 - Security",
+		"status": "FAIL",
+		"compliance": ["DPDP 2023 S.8", "CERT-In 2022", "RBI", "SBE"],
+		"remediation": "Restrict the default security group: remove unnecessary inbound rules and allow only required ports from trusted CIDRs",
+	}
+}
+
+# ---------------------------------------------------------------------------
 # EC2 instance: public IP (data residency / exposure)
 # ---------------------------------------------------------------------------
 deny contains msg if {
@@ -95,6 +118,25 @@ deny contains msg if {
 		"status": "FAIL",
 		"compliance": ["CERT-In 2022", "DPDP 2023"],
 		"remediation": sprintf("aws ec2 modify-instance-metadata-options --instance-id %v --http-tokens required --http-put-response-hop-limit 2", [input.asset.instance_id]),
+	}
+}
+
+# ---------------------------------------------------------------------------
+# DPDP / RBI: Unrestricted outbound (0.0.0.0/0) from security groups
+# (Aligned to your CIS-4.1-EGRESS trigger.)
+# ---------------------------------------------------------------------------
+deny contains msg if {
+	input.asset.asset_type == "security_group"
+	input.asset.allows_all_egress
+	msg := {
+		"rule_id": "RBI-EC2-ALL-EGRESS",
+		"issue": sprintf("Security group '%v' allows all outbound traffic — violates DPDP/RBI expectations to control data flow", [input.asset.group_id]),
+		"severity": "MEDIUM",
+		"framework": "RBI Cyber Security Framework",
+		"section": "Section 8 - Security",
+		"status": "FAIL",
+		"compliance": ["DPDP 2023 S.8", "RBI", "SBE"],
+		"remediation": "Restrict egress: remove 0.0.0.0/0 and ::/0 egress and allow only required destinations/ports",
 	}
 }
 
