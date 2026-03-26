@@ -101,7 +101,15 @@ class InventoryRunListView(APIView):
         provider = get_object_or_404(Provider, id=pk, tenant=tenant)
         runs = InventoryRun.objects.filter(provider=provider).order_by("-started_at")[:10]
         serializer = InventoryRunSerializer(runs, many=True)
-        return Response(serializer.data)
+        data = serializer.data
+        # Backward-compatible: keep list response shape, but ensure drift signal key
+        # is always present in run stats for easier frontend display/debugging.
+        for item in data:
+            stats = item.get("stats") or {}
+            if "config_changed_signals" not in stats:
+                stats["config_changed_signals"] = 0
+            item["stats"] = stats
+        return Response(data)
 
 
 class InventoryPullView(APIView):

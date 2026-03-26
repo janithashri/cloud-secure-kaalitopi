@@ -403,4 +403,61 @@ ORDER BY total DESC
 
 ---
 
+## Step 10 — Enable AWS Config drift detection (optional but recommended)
+
+Resource Explorer is good for discovery (`new/deleted/tag changes`) but may miss pure config drift.
+CloudSecure can augment delta selection with AWS Config change signals.
+
+### 10a) Environment flags
+
+In `.env`:
+
+```env
+ENABLE_AWS_CONFIG_DRIFT=true
+AWS_CONFIG_REGION=ap-south-1
+AWS_CONFIG_INITIAL_LOOKBACK_MINUTES=180
+```
+
+- `ENABLE_AWS_CONFIG_DRIFT=true`: turns on AWS Config signal enrichment.
+- `AWS_CONFIG_REGION`: region where your AWS Config recorder/aggregator is active.
+- `AWS_CONFIG_INITIAL_LOOKBACK_MINUTES`: first-run lookback window for warm start.
+
+### 10b) IAM permissions (CloudSecureRole)
+
+Add these actions to the role policy used by inventory:
+
+```json
+"config:SelectResourceConfig",
+"config:DescribeConfigurationRecorderStatus"
+```
+
+### 10c) Validate access from CloudSecure backend
+
+Run:
+
+```powershell
+cd C:\Users\Admin\cloud-secure\kaali-topi\cloudsecure\backend
+.\venv\Scripts\Activate.ps1
+python manage.py validate_aws_config_access --provider-id 1 --region ap-south-1
+```
+
+Expected success:
+- `AWS Config reachable. Recorders: [...]`
+
+### 10d) End-to-end behavior check
+
+1. Restart backend + celery worker after changing `.env`.
+2. Trigger inventory pull from UI.
+3. Check latest run `stats`:
+   - `config_changed_signals` should be non-zero when AWS Config reports changed resources.
+   - `delta_count` should include those signals.
+4. Confirm changed resource findings/config are refreshed even when tags were untouched.
+
+If `config_changed_signals` stays `0`, verify:
+- AWS Config recorder is enabled in target account/region.
+- role has `config:*` actions above.
+- `AWS_CONFIG_REGION` matches recorder region.
+
+---
+
 **End of setup guide.** For project-specific API paths or auth format, refer to the backend’s URL config and the frontend’s `AuthContext` / login flow.

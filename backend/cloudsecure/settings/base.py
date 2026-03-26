@@ -145,3 +145,8 @@ NEO4J_PASSWORD = os.environ.get("NEO4J_PASSWORD", "")
 # OPA Rule Engine
 OPA_URL = os.environ.get("OPA_URL", "http://localhost:8181")
 RULES_DIR = os.path.join(BASE_DIR, "tasks", "jobs", "inventory", "rules")
+
+# AWS Config-based drift signal (optional, non-breaking)
+ENABLE_AWS_CONFIG_DRIFT = os.environ.get("ENABLE_AWS_CONFIG_DRIFT", "false").lower() in ("1", "true", "yes")
+AWS_CONFIG_REGION = os.environ.get("AWS_CONFIG_REGION", os.environ.get("AWS_DEFAULT_REGION", "ap-south-1"))
+AWS_CONFIG_INITIAL_LOOKBACK_MINUTES = int(os.environ.get("AWS_CONFIG_INITIAL_LOOKBACK_MINUTES", "180"))

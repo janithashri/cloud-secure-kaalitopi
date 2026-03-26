@@ -183,7 +183,8 @@ export default function ScanPage() {
                   <th className="px-3 py-2 text-left text-xs font-medium uppercase text-slate-500">Status</th>
                   <th className="px-3 py-2 text-left text-xs font-medium uppercase text-slate-500">Started</th>
                   <th className="px-3 py-2 text-left text-xs font-medium uppercase text-slate-500">Finished</th>
-                  <th className="px-3 py-2 text-left text-xs font-medium uppercase text-slate-500">Resources</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium uppercase text-slate-500">Delta</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium uppercase text-slate-500">Config Signals</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-700/50">
@@ -211,10 +212,13 @@ export default function ScanPage() {
                       {run.started_at ? new Date(run.started_at).toLocaleString() : "—"}
                     </td>
                     <td className="px-3 py-2.5 text-xs text-slate-400">
-                      {run.finished_at ? new Date(run.finished_at).toLocaleString() : "—"}
+                      {run.completed_at ? new Date(run.completed_at).toLocaleString() : "—"}
                     </td>
                     <td className="px-3 py-2.5 text-xs text-slate-400">
-                      {run.resources_found ?? "—"}
+                      {run.stats?.delta_count ?? 0}
+                    </td>
+                    <td className="px-3 py-2.5 text-xs text-slate-400">
+                      {run.stats?.config_changed_signals ?? 0}
                     </td>
                   </tr>
                 ))}

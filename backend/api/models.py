@@ -127,3 +127,23 @@ class CustomRule(models.Model):
 
     def __str__(self):
         return f"{self.rule_id} ({self.resource_type})"
+
+
+class ConfigChangeCursor(models.Model):
+    """
+    Tracks last successful AWS Config drift polling watermark per account/region.
+    """
+
+    account_id = models.CharField(max_length=64)
+    region = models.CharField(max_length=32, default="ap-south-1")
+    last_polled_at = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = [["account_id", "region"]]
+        indexes = [
+            models.Index(fields=["account_id", "region"]),
+        ]
+
+    def __str__(self):
+        return f"{self.account_id}@{self.region}"

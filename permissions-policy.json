@@ -6,6 +6,8 @@
         "Action": [
           "resource-explorer-2:Search",
           "resource-explorer-2:GetIndex",
+          "config:SelectResourceConfig",
+          "config:DescribeConfigurationRecorderStatus",
           "s3:GetBucketPolicy",
           "s3:GetBucketAcl",
           "s3:GetBucketEncryption",

@@ -6,6 +6,7 @@ from django.utils import timezone
 
 from api.models import ResourceConfig
 from .config import get_client, get_session
+from .config_drift import collect_changed_arns_from_config
 from .fetchers import FETCHER_MAP
 from .hashing import compute_config_hash, compute_tag_hash
 from .neo4j_writer import get_neo4j_driver, tombstone_resource, write_resource_to_neo4j
@@ -334,6 +335,24 @@ def _process_account(account, role_name, neo4j_driver, stats, tenant, provider, 
 
     delta = compute_delta(current_arns, previous_hashes)
     delta_arns = delta["new"] | delta["changed"]
+
+    # Optional: augment delta with AWS Config-detected config changes.
+    # This fills the gap where Resource Explorer may not reflect non-tag config drift.
+    config_changed_arns = set()
+    if getattr(settings, "ENABLE_AWS_CONFIG_DRIFT", False):
+        cfg_region = getattr(settings, "AWS_CONFIG_REGION", AGGREGATOR_REGION) or AGGREGATOR_REGION
+        config_changed_arns = collect_changed_arns_from_config(
+            account_id=account_id,
+            role_name=role_name,
+            region=cfg_region,
+            lookback_minutes_default=getattr(settings, "AWS_CONFIG_INITIAL_LOOKBACK_MINUTES", 180),
+        )
+        # Only evaluate ARNs we can currently discover/resolve in this run.
+        config_changed_arns = {arn for arn in config_changed_arns if arn in current_arns}
+        if config_changed_arns:
+            logger.info("AWS Config drift detected %s changed ARNs", len(config_changed_arns))
+        stats["config_changed_signals"] = stats.get("config_changed_signals", 0) + len(config_changed_arns)
+        delta_arns |= config_changed_arns
 
     stats["delta_count"] += len(delta_arns)
     stats["new"] += len(delta["new"])
