@@ -1,4 +1,5 @@
 from django.contrib.auth import authenticate
+from django.contrib.auth.models import User
 import json
 from rest_framework import status
 from rest_framework.authtoken.models import Token
@@ -7,10 +8,45 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
 
+from accounts.models import Tenant, UserProfile
 from api.models import Finding, InventoryRun
 from api.serializers import FindingSerializer
 from providers.models import Provider
 from tasks.jobs.inventory.neo4j_writer import get_neo4j_driver
+
+
+class RegisterView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        username = request.data.get("username", "").strip()
+        email = request.data.get("email", "").strip()
+        password = request.data.get("password", "")
+
+        if not username or not password:
+            return Response(
+                {"detail": "username and password required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if User.objects.filter(username=username).exists():
+            return Response(
+                {"username": ["A user with this username already exists."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        user = User.objects.create_user(
+            username=username,
+            email=email or username,
+            password=password,
+        )
+        tenant = Tenant.objects.create(name=f"{username}'s workspace")
+        UserProfile.objects.create(user=user, tenant=tenant)
+
+        return Response(
+            {"detail": "Account created successfully"},
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class LoginView(APIView):

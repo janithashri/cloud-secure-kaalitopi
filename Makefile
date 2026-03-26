@@ -1,24 +1,34 @@
+DC=docker-compose
+
 up:
-	docker compose up -d
+	$(DC) up -d
 
 down:
-	docker compose down
+	$(DC) down
 
 build:
-	docker compose build
+	$(DC) build
+
+rebuild:
+	$(DC) up -d --build
 
 migrate:
-	docker compose exec backend python manage.py migrate
+	$(DC) exec backend python manage.py migrate
 
 createsuperuser:
-	docker compose exec backend python manage.py createsuperuser
+	$(DC) exec backend python manage.py createsuperuser
 
 logs:
-	docker compose logs -f backend celery
+	$(DC) logs -f backend celery
 
 shell:
-	docker compose exec backend python manage.py shell
+	$(DC) exec backend python manage.py shell
 
 frontend-logs:
-	docker compose logs -f frontend
+	$(DC) logs -f frontend
 
+all-logs:
+	$(DC) logs -f
+
+restart:
+	$(DC) down && $(DC) up -d

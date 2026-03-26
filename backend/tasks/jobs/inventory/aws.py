@@ -1,4 +1,5 @@
 import logging
+import os
 import time
 
 from django.utils import timezone
@@ -13,7 +14,7 @@ from .throttle import stagger_accounts, with_backoff
 
 logger = logging.getLogger(__name__)
 
-AGGREGATOR_REGION = "us-east-1"
+AGGREGATOR_REGION = os.environ.get("AWS_DEFAULT_REGION", "ap-south-1")
 
 
 def _arn_to_cfn_type(arn: str) -> str | None:

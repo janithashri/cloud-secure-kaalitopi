@@ -1,9 +1,17 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "../context/AuthContext";
-import { getFindings, getFindingsSummary } from "../api/findings";
+import { getFindings, getFindingsSummary, suppressFinding } from "../api/findings";
 import { triggerInventoryPull, getInventoryRuns } from "../api/inventory";
-import FindingsSummary from "../components/FindingsSummary";
-import RulesViolatedTable from "../components/RulesViolatedTable";
+import { generatePDFReport, generateCSVReport } from "../utils/reportExport";
+import SeverityChart from "../components/charts/SeverityChart";
+
+const severityColors = {
+  CRITICAL: "bg-red-500/10 text-red-400",
+  HIGH: "bg-orange-500/10 text-orange-400",
+  MEDIUM: "bg-yellow-500/10 text-yellow-400",
+  LOW: "bg-blue-500/10 text-blue-400",
+  INFO: "bg-slate-500/10 text-slate-400",
+};
 
 export default function FindingsPage() {
   const { api } = useAuth();
@@ -14,22 +22,9 @@ export default function FindingsPage() {
   const [loadingSummary, setLoadingSummary] = useState(false);
   const [loadingFindings, setLoadingFindings] = useState(false);
   const [filters, setFilters] = useState({ status: "OPEN", framework: "" });
-
-  const [scanLoading, setScanLoading] = useState(false);
-  const [scanPolling, setScanPolling] = useState(false);
-  const [latestRun, setLatestRun] = useState(null);
-  const [scanStartedAt, setScanStartedAt] = useState(null);
+  const [expandedId, setExpandedId] = useState(null);
+  const [suppressingId, setSuppressingId] = useState(null);
   const [toast, setToast] = useState(null);
-
-  const showToast = useCallback((type, message) => {
-    setToast({ type, message });
-  }, []);
-
-  useEffect(() => {
-    if (!toast) return;
-    const t = setTimeout(() => setToast(null), 5000);
-    return () => clearTimeout(t);
-  }, [toast]);
 
   useEffect(() => {
     api
@@ -56,126 +51,103 @@ export default function FindingsPage() {
     setLoadingFindings(true);
     getFindings(api, selectedProviderId, filters)
       .then((data) => {
-        const list =
-          data?.results ?? data?.data ?? (Array.isArray(data) ? data : []);
+        const list = data?.results ?? data?.data ?? (Array.isArray(data) ? data : []);
         setFindings(list);
       })
       .catch(() => setFindings([]))
       .finally(() => setLoadingFindings(false));
   }, [api, selectedProviderId, filters]);
 
-  const fetchRuns = useCallback(() => {
-    if (!selectedProviderId) return;
-    return getInventoryRuns(api, selectedProviderId)
-      .then((data) => {
-        const list = Array.isArray(data) ? data : data?.results || [];
-        setLatestRun(list?.[0] || null);
-      })
-      .catch(() => setLatestRun(null));
-  }, [api, selectedProviderId]);
+  useEffect(() => { fetchSummary(); }, [fetchSummary]);
+  useEffect(() => { fetchFindings(); }, [fetchFindings]);
 
-  const runScan = useCallback(async () => {
-    if (!selectedProviderId) return;
-    setScanLoading(true);
-    setScanPolling(true);
-    setScanStartedAt(new Date().toISOString());
-    setLatestRun(null);
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 5000);
+    return () => clearTimeout(t);
+  }, [toast]);
+
+  const handleSuppress = async (id) => {
+    setSuppressingId(id);
     try {
-      await triggerInventoryPull(api, selectedProviderId);
-      await fetchRuns();
-      // Give the worker a moment before the first poll tick
-      setTimeout(fetchRuns, 1500);
-    } catch (err) {
-      setScanPolling(false);
-      showToast("error", "Scan failed - check logs");
+      await suppressFinding(api, id);
+      fetchFindings();
+      fetchSummary();
+      setToast({ type: "success", message: "Finding suppressed" });
     } finally {
-      setScanLoading(false);
+      setSuppressingId(null);
     }
-  }, [api, selectedProviderId, fetchRuns, showToast]);
+  };
 
-  useEffect(() => {
-    fetchSummary();
-  }, [fetchSummary]);
+  const providerName =
+    providers.find((p) => p.id === selectedProviderId)?.name ||
+    providers.find((p) => p.id === selectedProviderId)?.aws_account_id ||
+    "Unknown";
 
-  useEffect(() => {
-    fetchFindings();
-  }, [fetchFindings]);
-
-  // Poll inventory runs every 5s while the latest run is running.
-  useEffect(() => {
-    if (!scanPolling || !selectedProviderId) return;
-    const t = setInterval(() => {
-      fetchRuns();
-    }, 5000);
-    return () => clearInterval(t);
-  }, [scanPolling, selectedProviderId, fetchRuns]);
-
-  // When the run finishes, refresh findings + show toast.
-  useEffect(() => {
-    if (!scanPolling) return;
-    if (!latestRun) return;
-    if (scanStartedAt && latestRun.started_at && latestRun.started_at < scanStartedAt) {
-      return;
-    }
-    if (latestRun.state === "running") return;
-
-    setScanPolling(false);
-    fetchSummary();
-    fetchFindings();
-
-    if (latestRun.state === "completed" || latestRun.state === "partial") {
-      showToast("success", "Scan complete - findings updated");
-    } else {
-      showToast("error", "Scan failed - check logs");
-    }
-  }, [scanPolling, latestRun?.state, latestRun?.started_at, scanStartedAt, fetchSummary, fetchFindings, showToast]);
+  const totalOpen = summary?.total_open ?? 0;
+  const criticalHigh = (summary?.by_severity?.CRITICAL || 0) + (summary?.by_severity?.HIGH || 0);
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-6">
-      <h1 className="text-2xl font-bold text-slate-800">Findings</h1>
+    <div className="min-h-screen bg-slate-900 p-6">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-white">Findings</h1>
+          <p className="mt-1 text-sm text-slate-400">
+            {totalOpen} open findings | {criticalHigh} critical+high
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => generatePDFReport(findings, summary, providerName, filters.framework)}
+            disabled={!findings.length}
+            className="flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-xs text-slate-300 transition hover:bg-slate-700 disabled:opacity-50"
+          >
+            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m.75 12l3 3m0 0l3-3m-3 3v-6m-1.5-9H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+            </svg>
+            PDF
+          </button>
+          <button
+            onClick={() => generateCSVReport(findings, providerName, filters.framework)}
+            disabled={!findings.length}
+            className="flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-xs text-slate-300 transition hover:bg-slate-700 disabled:opacity-50"
+          >
+            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+            </svg>
+            CSV
+          </button>
+        </div>
+      </div>
 
       {toast && (
         <div
-          className={[
-            "mt-4 rounded border px-4 py-3 text-sm",
+          className={`mb-4 rounded-xl border px-4 py-3 text-sm ${
             toast.type === "success"
-              ? "border-green-300 bg-green-50 text-green-800"
-              : toast.type === "error"
-                ? "border-red-300 bg-red-50 text-red-800"
-                : "border-slate-300 bg-slate-50 text-slate-700",
-          ].join(" ")}
+              ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+              : "border-red-500/30 bg-red-500/10 text-red-400"
+          }`}
         >
           {toast.message}
         </div>
       )}
 
-      <div className="mt-4 flex flex-wrap items-center gap-4">
-        <label className="text-sm font-medium text-slate-600">Provider</label>
+      {/* Filters */}
+      <div className="mb-6 flex flex-wrap items-center gap-3">
         <select
           value={selectedProviderId ?? ""}
           onChange={(e) => setSelectedProviderId(Number(e.target.value) || null)}
-          className="rounded border border-slate-300 px-3 py-2 text-sm"
+          className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white"
         >
           <option value="">Select provider</option>
           {providers.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name || p.aws_account_id}
-            </option>
+            <option key={p.id} value={p.id}>{p.name || p.aws_account_id}</option>
           ))}
         </select>
-      </div>
-
-      <div className="mt-6">
-        <FindingsSummary summary={summary} />
-      </div>
-
-      <div className="mt-6 flex flex-wrap items-center gap-4">
         <select
           value={filters.status || ""}
-          onChange={(e) =>
-            setFilters((f) => ({ ...f, status: e.target.value || undefined }))
-          }
-          className="rounded border border-slate-300 px-3 py-2 text-sm"
+          onChange={(e) => setFilters((f) => ({ ...f, status: e.target.value || undefined }))}
+          className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white"
         >
           <option value="OPEN">Open</option>
           <option value="SUPPRESSED">Suppressed</option>
@@ -184,10 +156,8 @@ export default function FindingsPage() {
         </select>
         <select
           value={filters.severity || ""}
-          onChange={(e) =>
-            setFilters((f) => ({ ...f, severity: e.target.value || undefined }))
-          }
-          className="rounded border border-slate-300 px-3 py-2 text-sm"
+          onChange={(e) => setFilters((f) => ({ ...f, severity: e.target.value || undefined }))}
+          className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white"
         >
           <option value="">All severities</option>
           <option value="CRITICAL">Critical</option>
@@ -195,13 +165,10 @@ export default function FindingsPage() {
           <option value="MEDIUM">Medium</option>
           <option value="LOW">Low</option>
         </select>
-
         <select
           value={filters.framework || ""}
-          onChange={(e) =>
-            setFilters((f) => ({ ...f, framework: e.target.value }))
-          }
-          className="rounded border border-slate-300 px-3 py-2 text-sm"
+          onChange={(e) => setFilters((f) => ({ ...f, framework: e.target.value }))}
+          className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white"
         >
           <option value="">All frameworks</option>
           <option value="CIS">CIS</option>
@@ -209,54 +176,129 @@ export default function FindingsPage() {
           <option value="RBI">RBI</option>
           <option value="SBE">SBE</option>
         </select>
-        <select
-          value={filters.resource_type || ""}
-          onChange={(e) =>
-            setFilters((f) => ({ ...f, resource_type: e.target.value || undefined }))
-          }
-          className="rounded border border-slate-300 px-3 py-2 text-sm"
-        >
-          <option value="">All resources</option>
-          {Object.keys(summary?.by_resource_type || {})
-            .sort()
-            .map((rt) => (
-              <option key={rt} value={rt}>
-                {rt}
-              </option>
-            ))}
-        </select>
-
         <button
-          type="button"
-          onClick={() => {
-            fetchSummary();
-            fetchFindings();
-          }}
-          className="rounded bg-slate-700 px-4 py-2 text-sm text-white hover:bg-slate-600"
+          onClick={() => { fetchSummary(); fetchFindings(); }}
+          className="rounded-lg border border-slate-700 bg-slate-800 px-4 py-2 text-sm text-slate-300 transition hover:bg-slate-700"
         >
           Refresh
         </button>
-        <button
-          type="button"
-          onClick={runScan}
-          disabled={!selectedProviderId || scanLoading || scanPolling}
-          className="rounded bg-green-600 px-4 py-2 text-sm text-white hover:bg-green-500 disabled:opacity-50"
-        >
-          {scanLoading || scanPolling ? "Running scan..." : "Run Scan"}
-        </button>
       </div>
 
-      <div className="mt-4">
-        <RulesViolatedTable
-          findings={findings}
-          loading={loadingFindings}
-          onSuppress={() => {
-            fetchFindings();
-            fetchSummary();
-          }}
-          filters={filters}
-          onFilterChange={setFilters}
-        />
+      {/* Summary + chart */}
+      <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className="col-span-2 grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <div className="rounded-xl border border-slate-800 bg-slate-800/50 p-4">
+            <p className="text-xs text-slate-400">Total Open</p>
+            <p className="mt-1 text-2xl font-bold text-white">{totalOpen}</p>
+          </div>
+          <div className="rounded-xl border border-slate-800 bg-slate-800/50 p-4">
+            <p className="text-xs text-slate-400">Critical+High</p>
+            <p className="mt-1 text-2xl font-bold text-orange-400">{criticalHigh}</p>
+          </div>
+          <div className="rounded-xl border border-slate-800 bg-slate-800/50 p-4">
+            <p className="text-xs text-slate-400">Frameworks</p>
+            <p className="mt-1 text-2xl font-bold text-white">
+              {summary?.by_framework ? Object.keys(summary.by_framework).length : 0}
+            </p>
+          </div>
+          <div className="rounded-xl border border-slate-800 bg-slate-800/50 p-4">
+            <p className="text-xs text-slate-400">New This Scan</p>
+            <p className="mt-1 text-2xl font-bold text-cyan-400">{summary?.new_this_run ?? 0}</p>
+          </div>
+        </div>
+        <div className="rounded-xl border border-slate-800 bg-slate-800/50 p-4">
+          <SeverityChart data={summary?.by_severity} />
+        </div>
+      </div>
+
+      {/* Findings table */}
+      <div className="rounded-xl border border-slate-800 bg-slate-800/50 overflow-hidden">
+        {loadingFindings ? (
+          <div className="flex items-center justify-center py-12">
+            <div className="h-8 w-8 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+          </div>
+        ) : findings.length === 0 ? (
+          <div className="py-12 text-center text-sm text-slate-500">
+            No findings. Run a scan to check your AWS account.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-slate-700">
+              <thead className="bg-slate-800/80">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-slate-500">Severity</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-slate-500">Rule ID</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-slate-500">Issue</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-slate-500">Resource</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-slate-500">Type</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-slate-500">Frameworks</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-slate-500">First Seen</th>
+                  <th className="px-4 py-3 text-right text-xs font-medium uppercase text-slate-500">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-700/50">
+                {findings.map((f) => (
+                  <>
+                    <tr
+                      key={f.id}
+                      className="cursor-pointer transition hover:bg-slate-800/50"
+                      onClick={() => setExpandedId(expandedId === f.id ? null : f.id)}
+                    >
+                      <td className="whitespace-nowrap px-4 py-3">
+                        <span className={`rounded px-2 py-0.5 text-xs font-medium ${severityColors[f.severity] || severityColors.INFO}`}>
+                          {f.severity}
+                        </span>
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-slate-400">{f.rule_id}</td>
+                      <td className="max-w-[200px] truncate px-4 py-3 text-sm text-slate-300" title={f.rule_name}>{f.rule_name}</td>
+                      <td className="max-w-[150px] truncate px-4 py-3 font-mono text-xs text-slate-500" title={f.arn}>
+                        {f.arn?.split("/").pop() || f.arn?.slice(0, 30)}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-xs text-slate-500">{f.resource_type}</td>
+                      <td className="px-4 py-3 text-xs text-slate-500">
+                        {Array.isArray(f.compliance_frameworks) ? f.compliance_frameworks.join(", ") : ""}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-xs text-slate-500">
+                        {f.first_seen ? new Date(f.first_seen).toLocaleDateString() : ""}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-right">
+                        {f.status === "OPEN" && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleSuppress(f.id); }}
+                            disabled={suppressingId === f.id}
+                            className="rounded bg-slate-700 px-2 py-1 text-xs text-slate-300 hover:bg-slate-600 disabled:opacity-50"
+                          >
+                            {suppressingId === f.id ? "..." : "Suppress"}
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                    {expandedId === f.id && (
+                      <tr key={`${f.id}-detail`} className="bg-slate-800/30">
+                        <td colSpan={8} className="px-4 py-4">
+                          <div className="space-y-3">
+                            <div>
+                              <p className="text-xs font-medium text-emerald-400">Remediation</p>
+                              <pre className="mt-1 whitespace-pre-wrap rounded-lg bg-slate-900 p-3 font-mono text-xs text-slate-300">
+                                {f.remediation_steps || "No steps provided."}
+                              </pre>
+                            </div>
+                            <div>
+                              <p className="text-xs font-medium text-emerald-400">Resource Config</p>
+                              <pre className="mt-1 max-h-48 overflow-y-auto whitespace-pre-wrap rounded-lg bg-slate-900 p-3 font-mono text-xs text-slate-300">
+                                {f.resource_config ? JSON.stringify(f.resource_config, null, 2) : "No stored config found."}
+                              </pre>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );
