@@ -9,8 +9,8 @@ from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
 
 from accounts.models import Tenant, UserProfile
-from api.models import Finding, InventoryRun
-from api.serializers import FindingSerializer
+from api.models import CustomRule, Finding, InventoryRun
+from api.serializers import CustomRuleSerializer, FindingSerializer
 from providers.models import Provider
 from tasks.jobs.inventory.neo4j_writer import get_neo4j_driver
 
@@ -322,19 +322,73 @@ class ProviderFindingsListView(APIView):
         qs = qs.order_by("-last_seen")
 
         # Optional: filter by compliance framework/category keyword (CIS/DPDP/RBI/SBE).
-        # We match by substring against the JSON list `compliance_frameworks`.
+        # We match against multiple finding fields so legacy + new rules behave consistently.
         framework_filter = request.query_params.get("framework")
         if framework_filter:
             wanted = framework_filter.strip().upper()
-            # Paginate after conversion to list to keep filtering logic simple/reliable.
-            qs = [
-                f
-                for f in qs
-                if any(
-                    wanted in str(item).upper()
-                    for item in (f.compliance_frameworks or [])
-                )
-            ]
+
+            def _matches_framework(finding) -> bool:
+                rule_id = str(finding.rule_id or "").upper()
+                raw = finding.raw_finding if isinstance(finding.raw_finding, dict) else {}
+
+                # Strict handling for known framework filters to avoid cross-match noise.
+                if wanted in {"CIS", "DPDP", "RBI", "SBE"}:
+                    if rule_id.startswith(f"{wanted}-"):
+                        return True
+
+                    tokens = set()
+                    for item in (finding.compliance_frameworks or []):
+                        if isinstance(item, str):
+                            upper_item = item.upper()
+                            if upper_item.startswith("CIS"):
+                                tokens.add("CIS")
+                            if upper_item.startswith("DPDP"):
+                                tokens.add("DPDP")
+                            if upper_item.startswith("RBI"):
+                                tokens.add("RBI")
+                            if upper_item.startswith("SBE"):
+                                tokens.add("SBE")
+
+                    framework_value = raw.get("framework")
+                    if isinstance(framework_value, str):
+                        fw = framework_value.upper()
+                        if fw.startswith("CIS"):
+                            tokens.add("CIS")
+                        if fw.startswith("DPDP"):
+                            tokens.add("DPDP")
+                        if fw.startswith("RBI"):
+                            tokens.add("RBI")
+                        if fw.startswith("SBE"):
+                            tokens.add("SBE")
+
+                    for item in (raw.get("compliance") or []):
+                        if isinstance(item, str):
+                            up = item.upper()
+                            if up.startswith("CIS"):
+                                tokens.add("CIS")
+                            if up.startswith("DPDP"):
+                                tokens.add("DPDP")
+                            if up.startswith("RBI"):
+                                tokens.add("RBI")
+                            if up.startswith("SBE"):
+                                tokens.add("SBE")
+
+                    return wanted in tokens
+
+                # Generic fallback for non-framework keyword filters.
+                fields = [str(x) for x in (finding.compliance_frameworks or [])]
+                if raw.get("framework"):
+                    fields.append(str(raw.get("framework")))
+                if isinstance(raw.get("compliance"), list):
+                    fields.extend([str(x) for x in raw.get("compliance") or []])
+                if finding.rule_id:
+                    fields.append(str(finding.rule_id))
+                if finding.rule_name:
+                    fields.append(str(finding.rule_name))
+                return wanted in " | ".join(fields).upper()
+
+            # Paginate after conversion to list for deterministic Python-side matching.
+            qs = [f for f in qs if _matches_framework(f)]
 
         from rest_framework.pagination import PageNumberPagination
         paginator = PageNumberPagination()
@@ -383,3 +437,22 @@ class FindingSuppressView(APIView):
         finding.status = "SUPPRESSED"
         finding.save(update_fields=["status"])
         return Response(status=status.HTTP_200_OK)
+
+
+class CustomRuleListCreateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        tenant = request.user.profile.tenant
+        provider_id = request.query_params.get("provider_id")
+        qs = CustomRule.objects.filter(tenant=tenant).order_by("-created_at")
+        if provider_id:
+            qs = qs.filter(provider_id=provider_id)
+        return Response(CustomRuleSerializer(qs, many=True).data)
+
+    def post(self, request):
+        tenant = request.user.profile.tenant
+        serializer = CustomRuleSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(tenant=tenant, created_by=request.user)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)

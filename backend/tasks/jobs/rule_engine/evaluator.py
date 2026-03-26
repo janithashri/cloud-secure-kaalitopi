@@ -2,12 +2,14 @@
 Evaluate a single resource against all applicable Rego packages; create/update Finding records.
 """
 import logging
-from django.conf import settings
+import re
+
+from django.db.models import Q
 from django.utils import timezone
 
-from api.models import Finding, InventoryRun, ResourceConfig
+from api.models import CustomRule, Finding, InventoryRun, ResourceConfig
 from .input_builder import build_opa_input
-from .opa_client import evaluate
+from .opa_client import evaluate, load_policy
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +63,54 @@ PACKAGE_MAP = {
 }
 
 
+def _extract_package_path(rego_policy: str) -> str | None:
+    if not isinstance(rego_policy, str):
+        return None
+    match = re.search(r"^\s*package\s+([A-Za-z0-9_.]+)\s*$", rego_policy, flags=re.MULTILINE)
+    if not match:
+        return None
+    return match.group(1).replace(".", "/")
+
+
+def _evaluate_custom_rules(
+    resource_type: str,
+    provider_id: int,
+    tenant_id: int,
+    opa_input: dict,
+) -> list[dict]:
+    denials: list[dict] = []
+    rules = CustomRule.objects.filter(
+        tenant_id=tenant_id,
+        enabled=True,
+        resource_type=resource_type,
+    ).filter(Q(provider_id=provider_id) | Q(provider__isnull=True))
+
+    for rule in rules:
+        package_path = _extract_package_path(rule.rego_policy)
+        if not package_path:
+            logger.warning("Custom rule %s skipped: missing package declaration", rule.rule_id)
+            continue
+
+        policy_id = f"custom_{tenant_id}_{rule.id}"
+        if not load_policy(policy_id, rule.rego_policy):
+            logger.warning("Custom rule %s skipped: failed to load policy", rule.rule_id)
+            continue
+
+        hits = evaluate(package_path, opa_input)
+        for msg in hits:
+            if not isinstance(msg, dict):
+                continue
+            merged = dict(msg)
+            merged["rule_id"] = merged.get("rule_id") or rule.rule_id
+            merged["issue"] = merged.get("issue") or rule.description or rule.name
+            merged["severity"] = merged.get("severity") or rule.severity
+            if not isinstance(merged.get("compliance"), list) or not merged.get("compliance"):
+                merged["compliance"] = rule.compliance_frameworks or []
+            merged["remediation"] = merged.get("remediation") or rule.description or ""
+            denials.append(merged)
+    return denials
+
+
 def evaluate_resource(
     resource_type: str,
     arn: str,
@@ -93,6 +143,14 @@ def evaluate_resource(
         pkg_path = pkg.replace(".", "/")
         denials = evaluate(pkg_path, opa_input)
         all_denials.extend(denials)
+    all_denials.extend(
+        _evaluate_custom_rules(
+            resource_type=resource_type,
+            provider_id=provider_id,
+            tenant_id=tenant_id,
+            opa_input=opa_input,
+        )
+    )
 
     created = 0
     for msg in all_denials:

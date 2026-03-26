@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from api.models import Finding, InventoryRun, ResourceConfig
+from api.models import CustomRule, Finding, InventoryRun, ResourceConfig
 
 
 class InventoryRunSerializer(serializers.ModelSerializer):
@@ -32,3 +32,23 @@ class FindingSerializer(serializers.ModelSerializer):
             "first_seen",
             "last_seen",
         ]
+
+
+class CustomRuleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CustomRule
+        fields = [
+            "id",
+            "name",
+            "resource_type",
+            "rule_id",
+            "severity",
+            "compliance_frameworks",
+            "description",
+            "rego_policy",
+            "enabled",
+            "provider",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]

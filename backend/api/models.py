@@ -95,3 +95,35 @@ class Finding(models.Model):
 
     def __str__(self):
         return f"{self.rule_id} | {self.arn[:80]}"
+
+
+class CustomRule(models.Model):
+    tenant = models.ForeignKey("accounts.Tenant", on_delete=models.CASCADE)
+    provider = models.ForeignKey(
+        "providers.Provider",
+        on_delete=models.CASCADE,
+        related_name="custom_rules",
+        null=True,
+        blank=True,
+    )
+    name = models.CharField(max_length=150)
+    resource_type = models.CharField(max_length=128)
+    rule_id = models.CharField(max_length=128)
+    severity = models.CharField(max_length=20, choices=Finding.SEVERITY_CHOICES, default="MEDIUM")
+    compliance_frameworks = models.JSONField(default=list)
+    description = models.TextField(blank=True)
+    rego_policy = models.TextField()
+    enabled = models.BooleanField(default=True)
+    created_by = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = [["tenant", "rule_id"]]
+        indexes = [
+            models.Index(fields=["tenant", "enabled"]),
+            models.Index(fields=["resource_type"]),
+        ]
+
+    def __str__(self):
+        return f"{self.rule_id} ({self.resource_type})"

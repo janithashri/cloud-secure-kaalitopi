@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback } from "react";
+import { Fragment, useState, useEffect, useCallback } from "react";
 import { useAuth } from "../context/AuthContext";
 import { getFindings, getFindingsSummary, suppressFinding } from "../api/findings";
 import { triggerInventoryPull, getInventoryRuns } from "../api/inventory";
 import { generatePDFReport, generateCSVReport } from "../utils/reportExport";
+import { createCustomRule, getCustomRules } from "../api/customRules";
 import SeverityChart from "../components/charts/SeverityChart";
 
 const severityColors = {
@@ -25,6 +26,17 @@ export default function FindingsPage() {
   const [expandedId, setExpandedId] = useState(null);
   const [suppressingId, setSuppressingId] = useState(null);
   const [toast, setToast] = useState(null);
+  const [customRules, setCustomRules] = useState([]);
+  const [savingCustomRule, setSavingCustomRule] = useState(false);
+  const [customRuleForm, setCustomRuleForm] = useState({
+    name: "",
+    resource_type: "AWS::S3::Bucket",
+    rule_id: "",
+    severity: "MEDIUM",
+    compliance_frameworks: "",
+    description: "",
+    rego_policy: "",
+  });
 
   useEffect(() => {
     api
@@ -58,8 +70,15 @@ export default function FindingsPage() {
       .finally(() => setLoadingFindings(false));
   }, [api, selectedProviderId, filters]);
 
+  const fetchCustomRules = useCallback(() => {
+    getCustomRules(api, selectedProviderId)
+      .then((list) => setCustomRules(Array.isArray(list) ? list : []))
+      .catch(() => setCustomRules([]));
+  }, [api, selectedProviderId]);
+
   useEffect(() => { fetchSummary(); }, [fetchSummary]);
   useEffect(() => { fetchFindings(); }, [fetchFindings]);
+  useEffect(() => { fetchCustomRules(); }, [fetchCustomRules]);
 
   useEffect(() => {
     if (!toast) return;
@@ -86,6 +105,36 @@ export default function FindingsPage() {
 
   const totalOpen = summary?.total_open ?? 0;
   const criticalHigh = (summary?.by_severity?.CRITICAL || 0) + (summary?.by_severity?.HIGH || 0);
+  const handleCreateCustomRule = async (e) => {
+    e.preventDefault();
+    setSavingCustomRule(true);
+    try {
+      const frameworks = customRuleForm.compliance_frameworks
+        .split(",")
+        .map((x) => x.trim())
+        .filter(Boolean);
+      await createCustomRule(api, {
+        ...customRuleForm,
+        provider: selectedProviderId || null,
+        compliance_frameworks: frameworks,
+      });
+      setCustomRuleForm({
+        name: "",
+        resource_type: customRuleForm.resource_type,
+        rule_id: "",
+        severity: "MEDIUM",
+        compliance_frameworks: "",
+        description: "",
+        rego_policy: "",
+      });
+      setToast({ type: "success", message: "Custom rule created" });
+      fetchCustomRules();
+    } catch {
+      setToast({ type: "error", message: "Failed to create custom rule" });
+    } finally {
+      setSavingCustomRule(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-slate-900 p-6">
@@ -212,6 +261,97 @@ export default function FindingsPage() {
       </div>
 
       {/* Findings table */}
+      <div className="mb-6 rounded-xl border border-slate-800 bg-slate-800/50 p-4">
+        <h2 className="text-sm font-semibold text-white">Custom Rules</h2>
+        <p className="mt-1 text-xs text-slate-400">
+          Create tenant rules with your own Rego policy. These are stored and ready for engine integration.
+        </p>
+        <form className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2" onSubmit={handleCreateCustomRule}>
+          <input
+            value={customRuleForm.name}
+            onChange={(e) => setCustomRuleForm((f) => ({ ...f, name: e.target.value }))}
+            placeholder="Rule name"
+            className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white"
+            required
+          />
+          <input
+            value={customRuleForm.rule_id}
+            onChange={(e) => setCustomRuleForm((f) => ({ ...f, rule_id: e.target.value }))}
+            placeholder="Rule ID (e.g. CUSTOM-S3-001)"
+            className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white"
+            required
+          />
+          <select
+            value={customRuleForm.resource_type}
+            onChange={(e) => setCustomRuleForm((f) => ({ ...f, resource_type: e.target.value }))}
+            className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white"
+          >
+            <option value="AWS::S3::Bucket">AWS::S3::Bucket</option>
+            <option value="AWS::EC2::SecurityGroup">AWS::EC2::SecurityGroup</option>
+            <option value="AWS::EC2::Instance">AWS::EC2::Instance</option>
+            <option value="AWS::IAM::User">AWS::IAM::User</option>
+            <option value="AWS::IAM::Role">AWS::IAM::Role</option>
+            <option value="AWS::RDS::DBInstance">AWS::RDS::DBInstance</option>
+            <option value="AWS::KMS::Key">AWS::KMS::Key</option>
+            <option value="AWS::CloudTrail::Trail">AWS::CloudTrail::Trail</option>
+          </select>
+          <select
+            value={customRuleForm.severity}
+            onChange={(e) => setCustomRuleForm((f) => ({ ...f, severity: e.target.value }))}
+            className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white"
+          >
+            <option value="CRITICAL">Critical</option>
+            <option value="HIGH">High</option>
+            <option value="MEDIUM">Medium</option>
+            <option value="LOW">Low</option>
+            <option value="INFO">Info</option>
+          </select>
+          <input
+            value={customRuleForm.compliance_frameworks}
+            onChange={(e) => setCustomRuleForm((f) => ({ ...f, compliance_frameworks: e.target.value }))}
+            placeholder="Frameworks CSV (CIS,DPDP,RBI,SBE)"
+            className="md:col-span-2 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white"
+          />
+          <input
+            value={customRuleForm.description}
+            onChange={(e) => setCustomRuleForm((f) => ({ ...f, description: e.target.value }))}
+            placeholder="Description"
+            className="md:col-span-2 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white"
+          />
+          <textarea
+            value={customRuleForm.rego_policy}
+            onChange={(e) => setCustomRuleForm((f) => ({ ...f, rego_policy: e.target.value }))}
+            placeholder="Paste Rego policy"
+            className="md:col-span-2 min-h-[120px] rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 font-mono text-xs text-white"
+            required
+          />
+          <div className="md:col-span-2 flex justify-end">
+            <button
+              type="submit"
+              disabled={savingCustomRule}
+              className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+            >
+              {savingCustomRule ? "Saving..." : "Create Rule"}
+            </button>
+          </div>
+        </form>
+        <div className="mt-4">
+          <p className="mb-2 text-xs text-slate-400">Saved rules ({customRules.length})</p>
+          <div className="max-h-40 overflow-y-auto rounded-lg border border-slate-700">
+            {customRules.length === 0 ? (
+              <div className="px-3 py-2 text-xs text-slate-500">No custom rules yet.</div>
+            ) : (
+              customRules.map((r) => (
+                <div key={r.id} className="flex items-center justify-between border-b border-slate-800 px-3 py-2 text-xs last:border-b-0">
+                  <span className="text-slate-300">{r.rule_id} - {r.name}</span>
+                  <span className="text-slate-500">{r.resource_type}</span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+
       <div className="rounded-xl border border-slate-800 bg-slate-800/50 overflow-hidden">
         {loadingFindings ? (
           <div className="flex items-center justify-center py-12">
@@ -238,9 +378,8 @@ export default function FindingsPage() {
               </thead>
               <tbody className="divide-y divide-slate-700/50">
                 {findings.map((f) => (
-                  <>
+                  <Fragment key={f.id}>
                     <tr
-                      key={f.id}
                       className="cursor-pointer transition hover:bg-slate-800/50"
                       onClick={() => setExpandedId(expandedId === f.id ? null : f.id)}
                     >
@@ -274,7 +413,7 @@ export default function FindingsPage() {
                       </td>
                     </tr>
                     {expandedId === f.id && (
-                      <tr key={`${f.id}-detail`} className="bg-slate-800/30">
+                      <tr className="bg-slate-800/30">
                         <td colSpan={8} className="px-4 py-4">
                           <div className="space-y-3">
                             <div>
@@ -293,7 +432,7 @@ export default function FindingsPage() {
                         </td>
                       </tr>
                     )}
-                  </>
+                  </Fragment>
                 ))}
               </tbody>
             </table>

@@ -7,6 +7,7 @@ from providers.v1.views import (
     InventoryPullView,
 )
 from api.v1.views import (
+    CustomRuleListCreateView,
     FindingSuppressView,
     ProviderFindingsListView,
     ProviderFindingsSummaryView,
@@ -21,4 +22,5 @@ urlpatterns = [
     path("providers/<int:provider_id>/findings/", ProviderFindingsListView.as_view(), name="provider-findings-list"),
     path("providers/<int:provider_id>/findings/summary/", ProviderFindingsSummaryView.as_view(), name="provider-findings-summary"),
     path("findings/<int:id>/suppress/", FindingSuppressView.as_view(), name="finding-suppress"),
+    path("custom-rules/", CustomRuleListCreateView.as_view(), name="custom-rule-list-create"),
 ]
