@@ -1,5 +1,3 @@
-
-
 import React, { useState } from "react";
 import {
   GlobeAltIcon,
@@ -9,8 +7,9 @@ import {
   InformationCircleIcon,
   ShieldCheckIcon,
   ArrowDownTrayIcon,
+  SparklesIcon
 } from "@heroicons/react/24/outline";
-// import VulnerabilityCard from './VulnerabilityCard'; // We'll build this card directly to avoid an extra file.
+ 
 
 const VulnerabilityCard = ({ issue }) => {
   const severity = issue.severity.toUpperCase();
@@ -33,7 +32,6 @@ const VulnerabilityCard = ({ issue }) => {
 
   const { color, icon } = severityMap[severity] || severityMap["LOW"];
 
-  // Simplified location format: main_file.tf:LineNum
   const location = issue.location;
   const simplifiedLocation = `${location.filename}:${location.start_line}`;
 
@@ -56,12 +54,23 @@ const VulnerabilityCard = ({ issue }) => {
       </p>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t border-slate-800 text-sm">
-        
         <div>
           <span className="text-slate-500 block">Resolution:</span>
           <span className="text-white">{issue.resolution}</span>
         </div>
       </div>
+
+      {issue.ai_fix && (
+        <div className="mt-4 p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">
+          <div className="flex items-center gap-2 mb-2 text-emerald-400 font-bold">
+            <SparklesIcon className="w-4 h-4" />
+            AI Suggested Remediation
+          </div>
+          <div className="text-slate-300 text-sm whitespace-pre-line font-mono">
+            {issue.ai_fix}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -70,18 +79,18 @@ const IacScanner = () => {
   const [githubUrl, setGithubUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState([]);
-  const [scanPerformed, setScanPerformed] = useState(false); // New state to track if a scan has run
+  const [scanPerformed, setScanPerformed] = useState(false);
   const [error, setError] = useState("");
-  const [scanId, setScanId] = useState(null); // To store the unique ID from the backend
+  const [scanId, setScanId] = useState(null); 
 
   const triggerScan = async (e) => {
     e.preventDefault();
     setLoading(true);
     setResults([]);
     setError("");
-    setScanPerformed(false); // Reset for new scan
+    setScanPerformed(false); 
 
-    // Basic Validation
+
     if (!githubUrl.includes("github.com")) {
       setError("Please enter a valid GitHub repository URL.");
       setLoading(false);
@@ -100,8 +109,8 @@ const IacScanner = () => {
         throw new Error(data.error || "Failed to complete scan.");
       }
 
-      // tfsec returns results in data.results
-      console.log("Scan response:", data); // Debug log
+
+      console.log("Scan response:", data);
       setScanId(data.scanId);
       setResults(data.results || []);
     } catch (err) {
@@ -111,21 +120,20 @@ const IacScanner = () => {
       );
     } finally {
       setLoading(false);
-      setScanPerformed(true); // Mark that the scan complete
+      setScanPerformed(true);
     }
   };
 
   const downloadReport = async (format) => {
     try {
-      // 1. Request the file from the backend
-      // IMPORTANT: We pass the scanId so the backend knows WHICH results to print
+     
       const response = await fetch(
         `http://localhost:5000/api/iac/export?format=${format}&scanId=${scanId}`,
       );
 
       if (!response.ok) throw new Error("Server could not generate the PDF.");
 
-      // 2. Convert the response into a 'Blob' (Binary Large Object)
+      
       const blob = await response.blob();
 
       // 3. Create a temporary local URL for that Blob
