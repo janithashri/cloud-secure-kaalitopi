@@ -80,11 +80,7 @@ export default function LoginPage() {
       {/* Left panel - branding */}
       <div className="hidden w-1/2 flex-col justify-between bg-gradient-to-br from-slate-900 via-slate-900 to-emerald-950 p-12 lg:flex">
         <Link to="/" className="flex items-center gap-2">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-500">
-            <svg className="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
-            </svg>
-          </div>
+          <img src="/logo.png" alt="CloudSecure" className="h-9 w-9 object-contain" />
           <span className="text-xl font-bold text-white">CloudSecure</span>
         </Link>
 
@@ -122,11 +118,7 @@ export default function LoginPage() {
       <div className="flex w-full flex-col items-center justify-center px-6 lg:w-1/2">
         {/* Mobile logo */}
         <Link to="/" className="mb-8 flex items-center gap-2 lg:hidden">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-500">
-            <svg className="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
-            </svg>
-          </div>
+          <img src="/logo.png" alt="CloudSecure" className="h-9 w-9 object-contain" />
           <span className="text-xl font-bold text-white">CloudSecure</span>
         </Link>
 
