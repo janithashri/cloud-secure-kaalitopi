@@ -32,6 +32,8 @@
 
 > **CloudSecure** is an open-source Cloud Security Posture Management (CSPM) platform that continuously scans your AWS environment, detects misconfigurations, maps attack paths, and produces actionable compliance findings — all from a single self-hosted dashboard.
 
+
+
 <p align="center">
   <img src="docs/images/hero.png" alt="Custom Rules — Create tenant rules with your own Rego policy" width="900">
 </p>
