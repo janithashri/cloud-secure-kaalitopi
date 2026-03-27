@@ -2,6 +2,7 @@ from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 from reportlab.lib import colors
 import os
+import csv
 
 def export_to_pdf(results, filename="scan_report.pdf"):
     """Generates a professional PDF report from tfsec results."""
@@ -21,7 +22,7 @@ def export_to_pdf(results, filename="scan_report.pdf"):
     y_position = height - 110
 
     for issue in results:
-        if y_position < 100:  # New page if running out of space
+        if y_position < 100:  
             c.showPage()
             y_position = height - 50
 
@@ -43,7 +44,30 @@ def export_to_pdf(results, filename="scan_report.pdf"):
         c.drawString(60, y_position, f"Resource: {issue.get('resource', 'unknown')}")
         y_position -= 15
         c.drawString(60, y_position, f"Description: {issue.get('description', 'No details available')[:100]}...")
-        y_position -= 30 # Space between items
+        y_position -= 30 
 
     c.save()
+    return output_path
+
+def export_to_csv(results, filename="scan_report.csv"):
+    """Generates a structured CSV report from scan results."""
+    output_path = os.path.join(os.getcwd(), filename)
+    
+    
+    headers = ['Severity', 'Rule ID', 'Description', 'Resource', 'Resolution', 'AI Remediation']
+
+    with open(output_path, mode='w', newline='', encoding='utf-8') as f:
+        writer = csv.writer(f)
+        writer.writerow(headers)
+
+        for issue in results:
+            writer.writerow([
+                issue.get('severity', 'N/A'),
+                issue.get('rule_id', 'N/A'),
+                issue.get('rule_description', 'N/A'),
+                issue.get('resource', 'N/A'),
+                issue.get('resolution', 'N/A'),
+                issue.get('ai_fix', 'N/A') 
+            ])
+            
     return output_path
