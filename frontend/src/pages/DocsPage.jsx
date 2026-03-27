@@ -300,6 +300,374 @@ aws iam put-role-policy \\
     ),
   },
   {
+    id: "dashboard",
+    title: "Dashboard",
+    content: (
+      <>
+        <p>
+          The <strong>Dashboard</strong> is the home screen after login. It gives you an at-a-glance view of your entire AWS security posture across all connected accounts.
+        </p>
+        <div className="mt-4 space-y-3">
+          {[
+            {
+              title: "Summary Cards",
+              desc: "Four metric cards at the top show: Total Findings (all open issues), Critical + High (findings needing immediate attention), Resources Scanned (total AWS resources discovered across all services), and Frameworks (number of active compliance mappings — CIS, DPDP, RBI, SBE).",
+            },
+            {
+              title: "Severity Breakdown Chart",
+              desc: "A visual chart breaks down findings by severity — Critical, High, Medium, Low. Use this to prioritize remediation effort. Critical and High findings represent the most exploitable misconfigurations.",
+            },
+            {
+              title: "Resource Type Breakdown",
+              desc: "Shows which AWS service has the most findings (S3, EC2, IAM, RDS, KMS, CloudTrail). Helps identify which service area needs the most attention.",
+            },
+            {
+              title: "Compliance Framework Coverage",
+              desc: "Maps your findings across CIS, DPDP, RBI, and SBE frameworks so you can see compliance gaps at a glance.",
+            },
+            {
+              title: "Recent Findings List",
+              desc: "A live list of the most recent findings from the last scan, showing severity badge, rule name, affected resource ARN, and timestamp.",
+            },
+          ].map((item) => (
+            <div key={item.title} className="rounded-lg border border-slate-700 bg-slate-800/50 p-4">
+              <h4 className="font-semibold text-white">{item.title}</h4>
+              <p className="mt-1 text-sm text-slate-400">{item.desc}</p>
+            </div>
+          ))}
+        </div>
+      </>
+    ),
+  },
+  {
+    id: "scan",
+    title: "Scan",
+    content: (
+      <>
+        <p>
+          The <strong>Scan</strong> tab is where you trigger security scans against your connected AWS account. CloudSecure uses AWS Resource Explorer to discover resources and then fetches detailed configuration for each one via boto3.
+        </p>
+        <div className="mt-4 space-y-3">
+          {[
+            {
+              title: "Selecting a Provider",
+              desc: "Choose which connected AWS account (provider) to scan from the dropdown. You must have at least one provider connected and tested before scanning.",
+            },
+            {
+              title: "Triggering a Scan",
+              desc: "Click 'Scan Now' to start an async inventory pull. The scan runs in the background via a Celery worker — you can navigate away and come back. The scan discovers resources across S3, EC2, IAM, RDS, KMS, CloudTrail, and Security Groups.",
+            },
+            {
+              title: "Scan Progress & Status",
+              desc: "The scan status updates in real time: Queued → Running → Completed (or Failed). Stats shown include total resources discovered, new/changed/deleted resources, and new findings created.",
+            },
+            {
+              title: "Scan History",
+              desc: "All previous scan runs are listed with their timestamp, status, and stats. Use this to track how your security posture changes over time between scans.",
+            },
+            {
+              title: "Delta Scanning",
+              desc: "CloudSecure only re-evaluates resources that have changed since the last scan (new, modified tags, or config drift). This keeps scans fast. Any resource that currently has zero findings is always re-evaluated as a safety fallback.",
+            },
+            {
+              title: "Services Scanned",
+              desc: "Each scan card shows what is checked per service: S3 (public access, encryption, versioning, logging), EC2 (security groups, IMDSv2, public IPs), IAM (MFA, inline policies, key rotation), RDS (encryption, public access, backup), KMS (rotation, policy), CloudTrail (logging, validation, CloudWatch).",
+            },
+          ].map((item) => (
+            <div key={item.title} className="rounded-lg border border-slate-700 bg-slate-800/50 p-4">
+              <h4 className="font-semibold text-white">{item.title}</h4>
+              <p className="mt-1 text-sm text-slate-400">{item.desc}</p>
+            </div>
+          ))}
+        </div>
+      </>
+    ),
+  },
+  {
+    id: "findings",
+    title: "Findings",
+    content: (
+      <>
+        <p>
+          The <strong>Findings</strong> tab is the main workspace for reviewing and managing security issues discovered during scans. Every misconfiguration found is recorded as a finding with full context.
+        </p>
+        <div className="mt-4 space-y-3">
+          {[
+            {
+              title: "Filtering Findings",
+              desc: "Filter by severity (Critical, High, Medium, Low), status (Open, Suppressed), compliance framework (CIS, DPDP, RBI, SBE), and resource type. Combine filters to focus on what matters most — e.g. Critical + CIS + IAM.",
+            },
+            {
+              title: "Finding Detail",
+              desc: "Click any finding to expand it. Each finding shows: the rule ID and name, affected resource ARN, AWS region, account ID, severity, compliance frameworks it maps to, and step-by-step remediation instructions.",
+            },
+            {
+              title: "Suppressing Findings",
+              desc: "If a finding is a known accepted risk (e.g. a public S3 bucket intentionally used for a static website), you can suppress it. Suppressed findings are tracked but excluded from your active count. They are never overwritten by subsequent scans.",
+            },
+            {
+              title: "Custom Rules (Rego Editor)",
+              desc: "Write your own Rego policies to create custom security rules specific to your organisation. Set a rule name, rule ID, target resource type (e.g. AWS::S3::Bucket), severity, compliance frameworks, and paste your Rego policy. Custom rules run alongside the built-in CIS/DPDP/RBI/SBE rules on every scan.",
+            },
+            {
+              title: "Remediation Steps",
+              desc: "Every finding includes actionable remediation steps. Follow these to fix the misconfiguration directly in AWS. After fixing and re-scanning, the finding will no longer appear if the issue is resolved.",
+            },
+          ].map((item) => (
+            <div key={item.title} className="rounded-lg border border-slate-700 bg-slate-800/50 p-4">
+              <h4 className="font-semibold text-white">{item.title}</h4>
+              <p className="mt-1 text-sm text-slate-400">{item.desc}</p>
+            </div>
+          ))}
+        </div>
+      </>
+    ),
+  },
+  {
+    id: "providers",
+    title: "Providers",
+    content: (
+      <>
+        <p>
+          The <strong>Providers</strong> tab lists all AWS accounts connected to CloudSecure. Each provider represents one AWS account that CloudSecure can scan.
+        </p>
+        <div className="mt-4 space-y-3">
+          {[
+            {
+              title: "Provider Card",
+              desc: "Each connected account shows as a card with: the provider name you gave it, the AWS Account ID, the IAM role name used for scanning, connection status, and the date it was added.",
+            },
+            {
+              title: "Test Connection",
+              desc: "Use the 'Test Connection' button to verify CloudSecure can still assume the IAM role in the target account. A green check means the role is reachable and Resource Explorer is accessible. A failure here will also cause scans to fail.",
+            },
+            {
+              title: "Removing a Provider",
+              desc: "Delete a provider to disconnect an AWS account. This removes the provider record but does not delete findings already collected. Use this if you've rotated role names or decommissioned an account.",
+            },
+            {
+              title: "Multi-tenant Isolation",
+              desc: "Each user account (tenant) only sees their own providers and findings. Providers are fully isolated between tenants — you cannot access another user's connected accounts.",
+            },
+          ].map((item) => (
+            <div key={item.title} className="rounded-lg border border-slate-700 bg-slate-800/50 p-4">
+              <h4 className="font-semibold text-white">{item.title}</h4>
+              <p className="mt-1 text-sm text-slate-400">{item.desc}</p>
+            </div>
+          ))}
+        </div>
+      </>
+    ),
+  },
+  {
+    id: "connect",
+    title: "Connect",
+    content: (
+      <>
+        <p>
+          The <strong>Connect</strong> tab is where you onboard a new AWS account into CloudSecure by providing the account details and IAM role.
+        </p>
+        <div className="mt-4 space-y-3">
+          {[
+            {
+              title: "Provider Name",
+              desc: "A friendly label for this AWS account (e.g. 'Production' or 'Dev Account'). This is only used for display within CloudSecure.",
+            },
+            {
+              title: "AWS Account ID",
+              desc: "The 12-digit AWS Account ID of the account you want to scan. Get it by running: aws sts get-caller-identity --query Account --output text",
+            },
+            {
+              title: "IAM Role Name",
+              desc: "The name of the IAM role CloudSecure will assume in the target account. Default is CloudSecureRole. This role must have the required read-only permissions and a trust policy that allows your CloudSecure account to assume it.",
+            },
+            {
+              title: "Test Connection",
+              desc: "Before saving, click 'Test Connection'. CloudSecure will attempt to assume the role via STS and verify Resource Explorer is accessible. A green success message confirms everything is configured correctly. Common failures: wrong account ID, role doesn't exist, trust policy is misconfigured, or Resource Explorer index is not ACTIVE.",
+            },
+            {
+              title: "IAM Setup Guide",
+              desc: "The Connect page includes an inline guide with the exact CLI commands and JSON policies needed to create the CloudSecureRole in the target account. Follow this if you haven't set up the role yet. The trust policy must reference your CloudSecure host account ID as the Principal.",
+            },
+          ].map((item) => (
+            <div key={item.title} className="rounded-lg border border-slate-700 bg-slate-800/50 p-4">
+              <h4 className="font-semibold text-white">{item.title}</h4>
+              <p className="mt-1 text-sm text-slate-400">{item.desc}</p>
+            </div>
+          ))}
+        </div>
+      </>
+    ),
+  },
+  {
+    id: "deepscan",
+    title: "Deep Scan & Attack Path",
+    content: (
+      <>
+        <p>
+          The <strong>Deep Scan</strong> tab provides attack path analysis powered by Neo4j and mapped to the <strong>MITRE ATT&CK framework</strong>. It goes beyond individual misconfigurations to show how an attacker could chain multiple weaknesses together to move laterally or escalate privileges.
+        </p>
+        <div className="mt-4 space-y-3">
+          {[
+            {
+              title: "MITRE ATT&CK Panel",
+              desc: "The left panel lists attack techniques grouped by tactic (Initial Access, Privilege Escalation, Lateral Movement, etc.). Each technique shows whether your environment has violations — red indicates active attack paths found, green means no violations for that technique.",
+            },
+            {
+              title: "Running Attack Analysis",
+              desc: "Click 'Run Attack Analysis' to execute all MITRE ATT&CK queries against your Neo4j resource graph. The engine checks for real attack paths based on your actual resource relationships — not just individual misconfigs. Examples: Public EC2 with Admin IAM Role, Publicly Reachable Data Plane with Missing Encryption, S3 Bucket with Sensitive Tag Indicators.",
+            },
+            {
+              title: "Graph Visualization",
+              desc: "The right panel renders an interactive force-directed graph of your AWS resource topology. Nodes represent AWS resources (EC2 instances, IAM roles, S3 buckets, security groups, etc.) and edges show relationships between them. Attack paths are highlighted in red with dashed edges so you can visually trace the exploit chain.",
+            },
+            {
+              title: "Interacting with the Graph",
+              desc: "Zoom and pan to explore large environments. Drag nodes to rearrange the layout. Search by node name, ARN, or resource type to filter the graph. Toggle edge labels to see relationship types. The graph supports up to 300 nodes for large AWS environments.",
+            },
+            {
+              title: "Attack Path Detail",
+              desc: "Click a MITRE technique to see the specific attack query, which nodes are violated, the MITRE tactic/technique mapping, a description of the attack scenario, and remediation guidance to break the attack path.",
+            },
+            {
+              title: "Filter by Node Type",
+              desc: "Use the node type filter (top of the graph) to focus on specific resource types — e.g. show only EC2 and IAM nodes to investigate privilege escalation paths.",
+            },
+          ].map((item) => (
+            <div key={item.title} className="rounded-lg border border-slate-700 bg-slate-800/50 p-4">
+              <h4 className="font-semibold text-white">{item.title}</h4>
+              <p className="mt-1 text-sm text-slate-400">{item.desc}</p>
+            </div>
+          ))}
+        </div>
+      </>
+    ),
+  },
+  {
+    id: "reports",
+    title: "Reports",
+    content: (
+      <>
+        <p>
+          The <strong>Reports</strong> tab lets you generate and export compliance reports based on your current findings. Reports can be shared with auditors, management, or used for internal compliance tracking.
+        </p>
+        <div className="mt-4 space-y-3">
+          {[
+            {
+              title: "Framework Filter",
+              desc: "Filter the report by compliance framework — CIS, DPDP, RBI, or SBE. You can generate a focused report for a specific regulatory requirement rather than exporting all findings at once.",
+            },
+            {
+              title: "Severity Filter",
+              desc: "Narrow the report to specific severity levels (Critical, High, Medium, Low). For executive summaries, export Critical + High only. For full audit reports, include all severities.",
+            },
+            {
+              title: "PDF Export",
+              desc: "Generates a formatted PDF report with a cover header, summary table (total findings by severity), and a detailed findings table with rule name, resource ARN, severity, compliance framework, and remediation steps. Suitable for audit submissions.",
+            },
+            {
+              title: "CSV Export",
+              desc: "Exports findings as a CSV file with all fields — rule ID, rule name, ARN, region, account ID, severity, status, compliance frameworks, and remediation steps. Use this for importing into spreadsheets, ticketing systems, or SIEM tools.",
+            },
+            {
+              title: "Findings Preview",
+              desc: "Before exporting, the Reports page shows a preview of findings that will be included based on your current filters, so you can verify the scope before generating the report.",
+            },
+          ].map((item) => (
+            <div key={item.title} className="rounded-lg border border-slate-700 bg-slate-800/50 p-4">
+              <h4 className="font-semibold text-white">{item.title}</h4>
+              <p className="mt-1 text-sm text-slate-400">{item.desc}</p>
+            </div>
+          ))}
+        </div>
+      </>
+    ),
+  },
+  {
+    id: "iac",
+    title: "IaC Scanning",
+    content: (
+      <>
+        <p>
+          The <strong>IaC (Infrastructure-as-Code) Scanner</strong> scans Terraform repositories for security misconfigurations before they are deployed to AWS. It catches issues at the code level — before they become live vulnerabilities.
+        </p>
+        <div className="mt-4 space-y-3">
+          {[
+            {
+              title: "How It Works",
+              desc: "Provide a GitHub repository URL containing Terraform code. CloudSecure fetches the repository and runs static analysis against the Terraform files, identifying insecure resource configurations such as open security groups, unencrypted storage, public S3 buckets, and missing IAM conditions.",
+            },
+            {
+              title: "Vulnerability Cards",
+              desc: "Each detected issue is shown as a card with: severity badge (Critical, High, Medium, Low), the resource and attribute affected, a description of the vulnerability, and the file/line location in your Terraform code.",
+            },
+            {
+              title: "Summary Statistics",
+              desc: "At the top of results, a summary shows total vulnerabilities found broken down by severity — Critical, High, Medium, Low. Use this to gauge the overall risk posture of your infrastructure code before deploying.",
+            },
+            {
+              title: "AI Suggested Remediation",
+              desc: "Where available, each vulnerability card includes an AI-generated remediation suggestion specific to the issue found. This gives you a concrete code fix to apply to your Terraform, not just a generic description of the problem.",
+            },
+            {
+              title: "Export Results",
+              desc: "IaC scan results can be exported as PDF or CSV for sharing with the development team or including in pull request reviews and security sign-off workflows.",
+            },
+            {
+              title: "Shift Left Security",
+              desc: "IaC scanning is a 'shift left' approach — catching misconfigurations in code review rather than after deployment. Use it as part of your CI/CD pipeline to prevent insecure infrastructure from ever reaching production.",
+            },
+          ].map((item) => (
+            <div key={item.title} className="rounded-lg border border-slate-700 bg-slate-800/50 p-4">
+              <h4 className="font-semibold text-white">{item.title}</h4>
+              <p className="mt-1 text-sm text-slate-400">{item.desc}</p>
+            </div>
+          ))}
+        </div>
+      </>
+    ),
+  },
+  {
+    id: "ai-remediation",
+    title: "AI Remediation Guide",
+    content: (
+      <>
+        <p>
+          CloudSecure includes AI-assisted remediation to help you fix security findings faster. Rather than just telling you what is wrong, the AI guide tells you exactly how to fix it in your specific environment.
+        </p>
+        <div className="mt-4 space-y-3">
+          {[
+            {
+              title: "Per-Finding Remediation Steps",
+              desc: "Every finding in the Findings tab includes detailed remediation steps generated for that specific rule and resource type. These steps are specific — for example, an S3 public access finding will include the exact AWS CLI command or Console steps to enable Block Public Access for that bucket.",
+            },
+            {
+              title: "IaC AI Fix Suggestions",
+              desc: "In the IaC Scanner, findings marked with the AI badge include a suggested Terraform code fix. The AI analyses the vulnerable resource block and suggests the corrected HCL configuration — for example, adding encryption = true to an aws_s3_bucket_server_side_encryption_configuration block.",
+            },
+            {
+              title: "Attack Path Remediation",
+              desc: "In the Deep Scan tab, each MITRE ATT&CK technique violation includes a remediation guide explaining how to break the specific attack chain. For example, for a 'Public EC2 with Admin IAM Role' finding, the guide explains both how to remove the public IP and how to scope down the IAM role permissions.",
+            },
+            {
+              title: "Custom Rule Guidance",
+              desc: "When writing custom Rego rules in the Findings tab, you can include your own remediation text in the rule description. This text is then shown to users alongside any violations the custom rule generates, giving your team organisation-specific remediation guidance.",
+            },
+            {
+              title: "Prioritisation Guidance",
+              desc: "Critical and High severity findings are always surfaced first. The AI remediation steps for these findings prioritise the fastest path to reducing risk — typically a single AWS Console change or CLI command that eliminates the most dangerous exposure.",
+            },
+          ].map((item) => (
+            <div key={item.title} className="rounded-lg border border-slate-700 bg-slate-800/50 p-4">
+              <h4 className="font-semibold text-white">{item.title}</h4>
+              <p className="mt-1 text-sm text-slate-400">{item.desc}</p>
+            </div>
+          ))}
+        </div>
+      </>
+    ),
+  },
+  {
     id: "commands",
     title: "Useful Commands",
     content: (
