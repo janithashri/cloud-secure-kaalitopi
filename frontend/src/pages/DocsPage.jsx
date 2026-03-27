@@ -742,13 +742,12 @@ aws iam put-role-policy \\
                 <tr key={path}>
                   <td className="px-3 py-2">
                     <span
-                      className={`rounded px-1.5 py-0.5 text-xs font-bold ${
-                        method === "GET"
+                      className={`rounded px-1.5 py-0.5 text-xs font-bold ${method === "GET"
                           ? "bg-blue-500/10 text-blue-400"
                           : method === "POST"
                             ? "bg-emerald-500/10 text-emerald-400"
                             : "bg-yellow-500/10 text-yellow-400"
-                      }`}
+                        }`}
                     >
                       {method}
                     </span>
@@ -852,11 +851,10 @@ export default function DocsPage() {
                   setActiveSection(s.id);
                   document.getElementById(s.id)?.scrollIntoView({ behavior: "smooth" });
                 }}
-                className={`block w-full rounded-lg px-3 py-2 text-left text-sm transition ${
-                  activeSection === s.id
+                className={`block w-full rounded-lg px-3 py-2 text-left text-sm transition ${activeSection === s.id
                     ? "bg-emerald-500/10 font-medium text-emerald-400"
                     : "text-slate-400 hover:bg-slate-800 hover:text-white"
-                }`}
+                  }`}
               >
                 {s.title}
               </button>

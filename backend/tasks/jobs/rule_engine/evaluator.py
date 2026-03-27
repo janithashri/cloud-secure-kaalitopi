@@ -16,7 +16,17 @@ logger = logging.getLogger(__name__)
 PACKAGE_MAP = {
     # Resource Explorer (and current inventory pipeline) stores simplified
     # type keys like `ec2:security-group` / `iam:user` rather than CFN types.
+    # Both forms must be present so evaluation works regardless of which type
+    # string the inventory pipeline passes.
+    "s3:bucket": [
+        "cloudsecure.rules.cis_aws_s3",
+        "cloudsecure.rules.india_aws_s3",
+    ],
     "ec2:security-group": [
+        "cloudsecure.rules.cis_aws_ec2",
+        "cloudsecure.rules.india_aws_ec2",
+    ],
+    "ec2:instance": [
         "cloudsecure.rules.cis_aws_ec2",
         "cloudsecure.rules.india_aws_ec2",
     ],
@@ -27,6 +37,18 @@ PACKAGE_MAP = {
     "iam:role": [
         "cloudsecure.rules.cis_aws_iam",
         "cloudsecure.rules.india_aws_iam",
+    ],
+    "rds:db": [
+        "cloudsecure.rules.cis_aws_rds",
+        "cloudsecure.rules.india_aws_rds",
+    ],
+    "kms:key": [
+        "cloudsecure.rules.cis_aws_kms",
+        "cloudsecure.rules.india_aws_kms",
+    ],
+    "cloudtrail:trail": [
+        "cloudsecure.rules.cis_aws_cloudtrail",
+        "cloudsecure.rules.india_aws_cloudtrail",
     ],
     "AWS::S3::Bucket": [
         "cloudsecure.rules.cis_aws_s3",
