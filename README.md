@@ -56,6 +56,9 @@
 | **Real-time Findings** | Findings appear as resources are scanned — no waiting for full completion |
 | **Suppression Workflow** | Mark findings as suppressed to track accepted risk |
 | **Delta Scanning** | Incremental scans only re-fetch resources that have changed |
+| **IaC Scanning** | Scans the terraform file in the github repo for possible vulnerability. |
+| **Intelligent Auditing** | Intelligent remediation steps by the Sarvam AI (India first approach) |
+
 
 ---
 
@@ -118,41 +121,53 @@ The dashboard gives you an at-a-glance view of your security posture:
   <img src="docs/images/attack-path.png" alt="MITRE Attack Techniques — Attack Path Graph" width="900">
 </p>
 
+### IaC Scanning
+<p align="center">
+  <img src="docs/images/IaC.png" alt="MITRE Attack Techniques — Attack Path Graph" width="900">
+</p>
+
+### AI Remediation Guide
+<p align="center">
+  <img src="docs/images/AI_Remediation.png" alt="MITRE Attack Techniques — Attack Path Graph" width="900">
+</p>
+
+ 
+
 ---
 
 ## 🏗️ Architecture
-
-```
+'''
 ┌─────────────────────────────────────────────────────────────┐
 │                        Browser                              │
-│              React + Vite (port 3000)                       │
+│                React + Vite (port 3000)                     │
 └──────────────────────────┬──────────────────────────────────┘
                            │ REST API
 ┌──────────────────────────▼──────────────────────────────────┐
-│                   Django Backend (port 8000)                 │
-│         DRF Token Auth · Multi-tenant · REST API            │
-└──────┬────────────┬─────────────────┬───────────────────────┘
-       │            │                 │
-┌──────▼───┐  ┌─────▼──────┐  ┌──────▼──────┐
-│PostgreSQL│  │   Valkey   │  │    Neo4j    │
-│  (state) │  │  (broker)  │  │  (graph)    │
-└──────────┘  └─────┬──────┘  └─────────────┘
+│                Django / Flask Backend                       │
+│      DRF Token Auth · Multi-tenant · REST API               │
+└──────┬────────────┬─────────────────┬───────────┬───────────┘
+       │            │                 │           │
+┌──────▼───┐  ┌─────▼──────┐   ┌──────▼──────┐  ┌─▼───────────┐
+│PostgreSQL│  │   Valkey   │   │    Neo4j    │  │  Sarvam AI  │
+│  (state) │  │  (broker)  │   │   (graph)   │  │(Remediation)│
+└──────────┘  └─────┬──────┘   └─────────────┘  └─────────────┘
                     │
-         ┌──────────▼──────────┐
-         │    Celery Workers   │
-         │  inventory · rules  │
-         └──────────┬──────────┘
-                    │
-         ┌──────────▼──────────┐    ┌─────────────┐
-         │     AWS (boto3)     │    │  OPA Server │
-         │  STS AssumeRole     │    │ Rego Policies│
-         └─────────────────────┘    └─────────────┘
-```
+          ┌─────────▼─────────┐           ┌───────────────────┐
+          │  Celery Workers   │           │   IaC Scanner     │
+          │ inventory · rules │           │ (tfsec / checkov) │
+          └─────────┬─────────┘           └─────────▲─────────┘
+                    │                               │
+          ┌─────────▼──────────┐          ┌─────────┴─────────┐
+          │    AWS (boto3)     │          │  GitHub Repos     │
+          │   STS AssumeRole   │          │  (Cloned Temp)    │
+          └────────────────────┘          └───────────────────┘
+
+'''
 
 | Component | Technology | Role |
 |---|---|---|
 | Frontend | React 18 + Vite + Tailwind | Dashboard UI |
-| Backend | Django 4 + Django REST Framework | API server, auth, tenant logic |
+| Backend | Django 4 + Django REST Framework | API server, auth, tenant logic | Flask
 | Task Queue | Celery + Valkey | Async inventory pulls and rule evaluation |
 | Database | PostgreSQL 15 | Findings, inventory runs, user/tenant data |
 | Graph DB | Neo4j 5 | Resource relationship graph, attack paths |
@@ -238,7 +253,18 @@ aws iam put-role-policy \
 
 ---
 
-### 4. Build & Start
+### 4. IaC Backend Setup 
+
+```bash
+cd IaC_backend
+cp .env.example .env
+pip install -r requirements.txt  #Download the required packages
+python run.py   #To run the development server
+```
+
+---
+
+### 5. Build & Start
 
 ```bash
 make build            # Build Docker images
@@ -249,12 +275,13 @@ make createsuperuser  # Create your admin account
 
 ---
 
-### 5. Open the App
+### 6. Open the App
 
 | Service | URL |
 |---|---|
 | **Dashboard** | http://localhost:3000 |
 | **API** | http://localhost:8000 |
+| **IaC Backend** | http://localhost:5000 |
 | **Neo4j Browser** | http://localhost:7474 |
 
 1. Log in at http://localhost:3000/login
@@ -326,6 +353,38 @@ CloudSecure's IAM role requires the following read-only permissions:
   ]
 }
 ```
+
+---
+
+# 🛡️ CloudSecure: Intelligent Cloud & IaC Security Auditor
+
+CloudSecure is a comprehensive security posture management tool built by **Team Kaali Topi**. It audits Infrastructure as Code (Terraform) to find misconfigurations .
+
+---
+
+## 🚀 cloudSecure-kaaliTopi CLI (Python Scanner)
+
+The `cloudsecure-kaalitopi` package is our official CLI tool, allowing you to run security audits directly from your terminal.
+
+---
+
+## Installation Guide 
+
+```bash
+pip install cloudsecure-kaalitopi  #This will install the package locally on your system and you can scan the files locally
+```
+
+---
+
+## 🛠️ Useful Commands
+
+| Command | Description |
+|---|---|
+| `cloudsecure-kaalitopi --version` | To know the current verion of the CLI tool. |
+| `cloudsecure-kaalitopi iac test.tf` | To scan the file locally , present in the current working directory. |
+| `cloudsecure-kaalitopi iac test.tf --csv-export` | To scan as well as save the CSV report locally. |
+| `cloudsecure-kaalitopi iac test.tf --pdf-export` | To scan as well as save the PDF report locally. |
+| `cloudsecure-kaalitopi --help` | To get more information about the CLI tool. |
 
 ---
 
