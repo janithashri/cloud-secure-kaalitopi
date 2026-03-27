@@ -78,16 +78,13 @@ export default function LandingPage() {
       <nav className="sticky top-0 z-50 border-b border-slate-800 bg-slate-950/90 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
           <div className="flex items-center gap-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-500">
-              <svg className="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
-              </svg>
-            </div>
+            <img src="/logo.png" alt="CloudSecure" className="h-9 w-9 object-contain" />
             <span className="text-xl font-bold tracking-tight">CloudSecure</span>
           </div>
           <div className="hidden items-center gap-8 md:flex">
             <a href="#features" className="text-sm text-slate-300 transition hover:text-white">Features</a>
             <a href="#how-it-works" className="text-sm text-slate-300 transition hover:text-white">How It Works</a>
+            <a href="#pricing" className="text-sm text-slate-300 transition hover:text-white">Pricing</a>
             <a href="#about" className="text-sm text-slate-300 transition hover:text-white">About</a>
             <Link to="/docs" className="text-sm text-slate-300 transition hover:text-white">Docs</Link>
           </div>
@@ -233,6 +230,134 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* Pricing — Coming Soon */}
+      <section id="pricing" className="mx-auto max-w-7xl px-6 py-24">
+        <div className="text-center">
+          <p className="text-sm font-semibold uppercase tracking-wider text-emerald-400">Pricing</p>
+          <h2 className="mt-2 text-3xl font-bold sm:text-4xl">Simple, Transparent Pricing</h2>
+          <p className="mx-auto mt-4 max-w-xl text-slate-400">
+            Flexible plans for individuals, teams, and enterprises — no hidden costs, no complexity.
+          </p>
+        </div>
+
+        {/* Toggle (visual only) */}
+        <div className="mt-10 flex items-center justify-center gap-4">
+          <span className="text-sm font-medium text-white">Monthly</span>
+          <div className="relative h-7 w-12 rounded-full bg-slate-700 p-1 cursor-not-allowed">
+            <div className="h-5 w-5 rounded-full bg-emerald-400 shadow transition" />
+          </div>
+          <span className="text-sm text-slate-400">Annual</span>
+          <span className="rounded-full bg-emerald-500/20 px-3 py-0.5 text-xs font-semibold text-emerald-400">
+            Save 20%
+          </span>
+        </div>
+
+        {/* Cards */}
+        <div className="mt-12 grid gap-8 md:grid-cols-3">
+          {/* Starter */}
+          <div className="relative rounded-2xl border border-slate-800 bg-slate-900/50 p-8 transition hover:border-emerald-500/30">
+            <h3 className="text-lg font-semibold">Starter</h3>
+            <p className="mt-2 text-sm text-slate-400">For individuals getting started with cloud security.</p>
+            <div className="mt-6 flex items-baseline gap-1">
+              <span className="text-4xl font-bold text-white">—</span>
+            </div>
+            <ul className="mt-8 space-y-3 text-sm text-slate-400">
+              <li className="flex items-center gap-2">
+                <svg className="h-4 w-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
+                1 AWS Account
+              </li>
+              <li className="flex items-center gap-2">
+                <svg className="h-4 w-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
+                Basic CIS Checks
+              </li>
+              <li className="flex items-center gap-2">
+                <svg className="h-4 w-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
+                Email Reports
+              </li>
+            </ul>
+            <button
+              disabled
+              className="mt-8 w-full rounded-lg border border-slate-700 bg-slate-800/50 py-3 text-sm font-semibold text-slate-400 cursor-not-allowed"
+            >
+              Coming Soon
+            </button>
+          </div>
+
+          {/* Pro — Popular */}
+          <div className="relative rounded-2xl border-2 border-emerald-500/50 bg-slate-900/80 p-8 shadow-lg shadow-emerald-500/5 transition hover:border-emerald-500/70">
+            <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-emerald-500 px-4 py-1 text-xs font-bold uppercase tracking-wider text-white">
+              Popular
+            </span>
+            <h3 className="text-lg font-semibold">Pro</h3>
+            <p className="mt-2 text-sm text-slate-400">For teams that need scale, compliance, and priority support.</p>
+            <div className="mt-6 flex items-baseline gap-1">
+              <span className="text-4xl font-bold text-white">—</span>
+            </div>
+            <ul className="mt-8 space-y-3 text-sm text-slate-400">
+              <li className="flex items-center gap-2">
+                <svg className="h-4 w-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
+                Up to 10 AWS Accounts
+              </li>
+              <li className="flex items-center gap-2">
+                <svg className="h-4 w-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
+                Deep Scan + Graph Analysis
+              </li>
+              <li className="flex items-center gap-2">
+                <svg className="h-4 w-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
+                Custom Rego Policies
+              </li>
+              <li className="flex items-center gap-2">
+                <svg className="h-4 w-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
+                Priority Support
+              </li>
+            </ul>
+            <button
+              disabled
+              className="mt-8 w-full rounded-lg bg-emerald-600/40 py-3 text-sm font-semibold text-emerald-300 cursor-not-allowed"
+            >
+              Coming Soon
+            </button>
+          </div>
+
+          {/* Enterprise */}
+          <div className="relative rounded-2xl border border-slate-800 bg-slate-900/50 p-8 transition hover:border-emerald-500/30">
+            <h3 className="text-lg font-semibold">Enterprise</h3>
+            <p className="mt-2 text-sm text-slate-400">For large organizations requiring unlimited resources and dedicated support.</p>
+            <div className="mt-6 flex items-baseline gap-1">
+              <span className="text-4xl font-bold text-white">—</span>
+            </div>
+            <ul className="mt-8 space-y-3 text-sm text-slate-400">
+              <li className="flex items-center gap-2">
+                <svg className="h-4 w-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
+                Unlimited AWS Accounts
+              </li>
+              <li className="flex items-center gap-2">
+                <svg className="h-4 w-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
+                Multi-Cloud (AWS, Azure, GCP)
+              </li>
+              <li className="flex items-center gap-2">
+                <svg className="h-4 w-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
+                SSO & RBAC Integration
+              </li>
+              <li className="flex items-center gap-2">
+                <svg className="h-4 w-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
+                Dedicated Account Manager
+              </li>
+            </ul>
+            <button
+              disabled
+              className="mt-8 w-full rounded-lg border border-slate-700 bg-slate-800/50 py-3 text-sm font-semibold text-slate-400 cursor-not-allowed"
+            >
+              Coming Soon
+            </button>
+          </div>
+        </div>
+
+        <p className="mt-10 text-center text-sm text-slate-500">
+          Contact us for multi-year or volume discounts.
+        </p>
+      </section>
+
       {/* About / Mission */}
       <section id="about" className="mx-auto max-w-7xl px-6 py-24">
         <div className="grid gap-16 lg:grid-cols-2 lg:items-center">
@@ -318,11 +443,7 @@ export default function LandingPage() {
         <div className="mx-auto max-w-7xl px-6 py-8">
           <div className="flex flex-col items-center justify-between gap-4 sm:flex-row">
             <div className="flex items-center gap-2">
-              <div className="flex h-7 w-7 items-center justify-center rounded-md bg-emerald-500">
-                <svg className="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
-                </svg>
-              </div>
+              <img src="/logo.png" alt="CloudSecure" className="h-7 w-7 object-contain" />
               <span className="font-semibold">CloudSecure</span>
             </div>
             <p className="text-sm text-slate-500">
