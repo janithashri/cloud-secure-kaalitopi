@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 const CARTOGRAPHY_NODE_COLORS = {
   AWSAccount: "#1F4E79",
@@ -76,12 +76,12 @@ function forceLayout(nodes, edges, width, height) {
 
   const centerX = width / 2;
   const centerY = height / 2;
-  const repulsion = 2600;
-  const spring = 0.006;
-  const targetLen = 120;
-  const damping = 0.85;
+  const repulsion = 9800;
+  const spring = 0.004;
+  const targetLen = 240;
+  const damping = 0.87;
 
-  for (let step = 0; step < 140; step += 1) {
+  for (let step = 0; step < 220; step += 1) {
     for (let i = 0; i < pos.length; i += 1) {
       for (let j = i + 1; j < pos.length; j += 1) {
         const dx = pos[j].x - pos[i].x;
@@ -118,8 +118,40 @@ function forceLayout(nodes, edges, width, height) {
       p.vy += (centerY - p.y) * 0.0008;
       p.vx *= damping;
       p.vy *= damping;
-      p.x = Math.max(30, Math.min(width - 30, p.x + p.vx));
-      p.y = Math.max(30, Math.min(height - 30, p.y + p.vy));
+      p.x = Math.max(40, Math.min(width - 40, p.x + p.vx));
+      p.y = Math.max(40, Math.min(height - 40, p.y + p.vy));
+    }
+  }
+
+  // Final collision pass to keep nodes tappable/readable.
+  const baseRadius = 26;
+  const minGap = 30;
+  for (let step = 0; step < 60; step += 1) {
+    for (let i = 0; i < pos.length; i += 1) {
+      for (let j = i + 1; j < pos.length; j += 1) {
+        let dx = pos[j].x - pos[i].x;
+        let dy = pos[j].y - pos[i].y;
+        let d = Math.sqrt(dx * dx + dy * dy);
+
+        // If perfectly overlapping, create a deterministic tiny nudge.
+        if (d < 0.001) {
+          const angle = ((i + 1) * (j + 3) * 17) % 360;
+          dx = Math.cos((angle * Math.PI) / 180);
+          dy = Math.sin((angle * Math.PI) / 180);
+          d = 1;
+        }
+
+        const minDist = baseRadius * 2 + minGap;
+        if (d < minDist) {
+          const push = (minDist - d) * 0.5;
+          const ux = dx / d;
+          const uy = dy / d;
+          pos[i].x = Math.max(40, Math.min(width - 40, pos[i].x - ux * push));
+          pos[i].y = Math.max(40, Math.min(height - 40, pos[i].y - uy * push));
+          pos[j].x = Math.max(40, Math.min(width - 40, pos[j].x + ux * push));
+          pos[j].y = Math.max(40, Math.min(height - 40, pos[j].y + uy * push));
+        }
+      }
     }
   }
 
@@ -140,11 +172,24 @@ export default function GraphCanvas({
 }) {
   const svgRef = useRef(null);
   const dragRef = useRef(null);
+  const nodeDragRef = useRef(null);
   const [viewport, setViewport] = useState({ scale: 1, tx: 0, ty: 0 });
+  const [searchTerm, setSearchTerm] = useState("");
+  const [hoveredNode, setHoveredNode] = useState(null);
+  const [showEdgeLabels, setShowEdgeLabels] = useState(false);
+  const [manualNodePositions, setManualNodePositions] = useState({});
 
   const rawNodes = graphData?.nodes || [];
   const rawEdges = graphData?.edges || [];
   const nodes = rawNodes.slice(0, MAX_VISIBLE_NODES);
+  const canvasWidth = useMemo(() => {
+    const n = Math.max(1, nodes.length);
+    return Math.max(width, Math.min(3200, Math.round(Math.sqrt(n) * 230)));
+  }, [nodes.length, width]);
+  const canvasHeight = useMemo(() => {
+    const n = Math.max(1, nodes.length);
+    return Math.max(height, Math.min(2400, Math.round(Math.sqrt(n) * 180)));
+  }, [nodes.length, height]);
   const nodeIds = new Set(nodes.map((n) => n.id));
   const edges = rawEdges.filter((e) => nodeIds.has(e.source) && nodeIds.has(e.target));
   const pathNodeIds = new Set((attackPathGraph?.nodes || []).map((n) => n.id));
@@ -152,9 +197,17 @@ export default function GraphCanvas({
   const hasPath = !!selectedAttack && (attackPathGraph?.violated || false);
 
   const positions = useMemo(() => {
-    if (edges.length === 0) return circleLayout(nodes, width, height);
-    return forceLayout(nodes, edges, width, height);
-  }, [nodes, edges, width, height]);
+    if (edges.length === 0) return circleLayout(nodes, canvasWidth, canvasHeight);
+    return forceLayout(nodes, edges, canvasWidth, canvasHeight);
+  }, [nodes, edges, canvasWidth, canvasHeight]);
+
+  const effectivePositions = useMemo(() => {
+    const merged = { ...positions };
+    for (const [id, p] of Object.entries(manualNodePositions)) {
+      if (merged[id]) merged[id] = p;
+    }
+    return merged;
+  }, [positions, manualNodePositions]);
 
   const visibleTypes = useMemo(() => {
     const types = Array.from(new Set(nodes.map((n) => n.type).filter(Boolean)));
@@ -170,21 +223,119 @@ export default function GraphCanvas({
     return map;
   }, [edges]);
 
+  const degreeByNodeId = useMemo(() => {
+    const map = {};
+    for (const n of nodes) map[n.id] = 0;
+    for (const e of edges) {
+      if (map[e.source] !== undefined) map[e.source] += 1;
+      if (map[e.target] !== undefined) map[e.target] += 1;
+    }
+    return map;
+  }, [nodes, edges]);
+
+  const searchedNodeIds = useMemo(() => {
+    const q = searchTerm.trim().toLowerCase();
+    if (!q) return new Set();
+    const set = new Set();
+    for (const n of nodes) {
+      const hay = `${n.label || ""} ${n.type || ""} ${n.id || ""}`.toLowerCase();
+      if (hay.includes(q)) set.add(n.id);
+    }
+    return set;
+  }, [nodes, searchTerm]);
+
+  function fitToGraph() {
+    if (!nodes.length) {
+      setViewport({ scale: 1, tx: 0, ty: 0 });
+      return;
+    }
+    const pts = nodes.map((n) => effectivePositions[n.id]).filter(Boolean);
+    if (!pts.length) return;
+    let minX = pts[0].x;
+    let maxX = pts[0].x;
+    let minY = pts[0].y;
+    let maxY = pts[0].y;
+    for (const p of pts) {
+      minX = Math.min(minX, p.x);
+      maxX = Math.max(maxX, p.x);
+      minY = Math.min(minY, p.y);
+      maxY = Math.max(maxY, p.y);
+    }
+    const pad = 50;
+    const graphW = Math.max(100, maxX - minX + pad * 2);
+    const graphH = Math.max(100, maxY - minY + pad * 2);
+    const scale = clampScale(Math.min(canvasWidth / graphW, canvasHeight / graphH));
+    const cx = (minX + maxX) / 2;
+    const cy = (minY + maxY) / 2;
+    setViewport({
+      scale,
+      tx: canvasWidth / 2 - cx * scale,
+      ty: canvasHeight / 2 - cy * scale,
+    });
+  }
+
+  useEffect(() => {
+    fitToGraph();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nodes.length, edges.length, canvasWidth, canvasHeight]);
+
+  useEffect(() => {
+    setManualNodePositions((prev) => {
+      const next = {};
+      for (const n of nodes) {
+        if (prev[n.id]) next[n.id] = prev[n.id];
+      }
+      return next;
+    });
+  }, [nodes]);
+
   function clampScale(value) {
     return Math.max(MIN_SCALE, Math.min(MAX_SCALE, value));
   }
 
   function onWheel(event) {
     event.preventDefault();
-    const next = clampScale(viewport.scale * (event.deltaY > 0 ? 0.9 : 1.1));
-    setViewport((v) => ({ ...v, scale: next }));
+    const svg = svgRef.current;
+    if (!svg) return;
+
+    const rect = svg.getBoundingClientRect();
+    const mx = event.clientX - rect.left;
+    const my = event.clientY - rect.top;
+    const zoomFactor = event.deltaY > 0 ? 0.9 : 1.1;
+
+    setViewport((v) => {
+      const nextScale = clampScale(v.scale * zoomFactor);
+      const worldX = (mx - v.tx) / v.scale;
+      const worldY = (my - v.ty) / v.scale;
+      return {
+        scale: nextScale,
+        tx: mx - worldX * nextScale,
+        ty: my - worldY * nextScale,
+      };
+    });
   }
 
   function onMouseDown(event) {
+    if (nodeDragRef.current) return;
     dragRef.current = { x: event.clientX, y: event.clientY, tx: viewport.tx, ty: viewport.ty };
   }
 
   function onMouseMove(event) {
+    if (nodeDragRef.current) {
+      const svg = svgRef.current;
+      if (!svg) return;
+      const rect = svg.getBoundingClientRect();
+      const mx = event.clientX - rect.left;
+      const my = event.clientY - rect.top;
+      const worldX = (mx - viewport.tx) / viewport.scale;
+      const worldY = (my - viewport.ty) / viewport.scale;
+      const { nodeId, offsetX, offsetY } = nodeDragRef.current;
+      setManualNodePositions((prev) => ({
+        ...prev,
+        [nodeId]: { x: worldX - offsetX, y: worldY - offsetY },
+      }));
+      return;
+    }
     if (!dragRef.current) return;
     const dx = event.clientX - dragRef.current.x;
     const dy = event.clientY - dragRef.current.y;
@@ -193,6 +344,25 @@ export default function GraphCanvas({
 
   function onMouseUp() {
     dragRef.current = null;
+    nodeDragRef.current = null;
+  }
+
+  function onNodeMouseDown(event, nodeId) {
+    event.stopPropagation();
+    const svg = svgRef.current;
+    if (!svg) return;
+    const rect = svg.getBoundingClientRect();
+    const mx = event.clientX - rect.left;
+    const my = event.clientY - rect.top;
+    const worldX = (mx - viewport.tx) / viewport.scale;
+    const worldY = (my - viewport.ty) / viewport.scale;
+    const nodePos = effectivePositions[nodeId];
+    if (!nodePos) return;
+    nodeDragRef.current = {
+      nodeId,
+      offsetX: worldX - nodePos.x,
+      offsetY: worldY - nodePos.y,
+    };
   }
 
   return (
@@ -226,14 +396,41 @@ export default function GraphCanvas({
         >
           Reset View
         </button>
+        <button
+          onClick={fitToGraph}
+          className="rounded border border-slate-700 bg-slate-800 px-2 py-1 hover:bg-slate-700"
+        >
+          Fit to Graph
+        </button>
+        <label className="ml-2 inline-flex items-center gap-1 text-slate-400">
+          <input
+            type="checkbox"
+            checked={showEdgeLabels}
+            onChange={(e) => setShowEdgeLabels(e.target.checked)}
+            className="h-3.5 w-3.5 accent-emerald-500"
+          />
+          Edge labels
+        </label>
         <span className="ml-auto text-slate-400">
           Scroll to zoom, drag background to pan ({Math.round(viewport.scale * 100)}%)
         </span>
       </div>
+      <div className="mb-2">
+        <input
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          placeholder="Search node by name, id, or type..."
+          className="w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-200 placeholder:text-slate-500"
+        />
+      </div>
+      <div className="max-h-[70vh] overflow-auto rounded bg-slate-950">
       <svg
         ref={svgRef}
-        viewBox={`0 0 ${width} ${height}`}
-        className="h-[560px] w-full rounded bg-slate-950"
+        width={canvasWidth}
+        height={canvasHeight}
+        viewBox={`0 0 ${canvasWidth} ${canvasHeight}`}
+        className="rounded bg-slate-950"
+        style={{ touchAction: "none" }}
         onWheel={onWheel}
         onMouseDown={onMouseDown}
         onMouseMove={onMouseMove}
@@ -248,10 +445,13 @@ export default function GraphCanvas({
             <path d="M0,0 L0,6 L9,3 z" fill="#ef4444" />
           </marker>
         </defs>
-        <g transform={`translate(${viewport.tx}, ${viewport.ty}) scale(${viewport.scale})`}>
+        <g
+          transform={`translate(${viewport.tx}, ${viewport.ty}) scale(${viewport.scale})`}
+          style={{ transition: dragRef.current ? "none" : "transform 120ms ease-out" }}
+        >
           {edges.map((e, i) => {
-            const s = positions[e.source];
-            const t = positions[e.target];
+            const s = effectivePositions[e.source];
+            const t = effectivePositions[e.target];
             if (!s || !t) return null;
             const key = `${e.source}->${e.target}`;
             const inPath = pathEdgeIds.has(key);
@@ -272,21 +472,51 @@ export default function GraphCanvas({
                 >
                   {inPath && <animate attributeName="stroke-dashoffset" from="24" to="0" dur="1.2s" repeatCount="indefinite" />}
                 </line>
+                {showEdgeLabels && (
+                  <text
+                    x={(s.x + t.x) / 2}
+                    y={(s.y + t.y) / 2}
+                    textAnchor="middle"
+                    fontSize="8"
+                    fill="#94a3b8"
+                    opacity={dim ? 0.25 : 0.7}
+                  >
+                    {e.relationship || "RELATED_TO"}
+                  </text>
+                )}
               </g>
             );
           })}
 
           {nodes.map((n) => {
-            const p = positions[n.id];
+            const p = effectivePositions[n.id];
             if (!p) return null;
             const inPath = pathNodeIds.has(n.id);
             const dim = hasPath && !inPath;
             const base = colorForNodeType(n.type);
             const fill = inPath ? "#dc2626" : base;
+            const searched = searchedNodeIds.has(n.id);
+            const degree = degreeByNodeId[n.id] || 0;
+            const radius = Math.max(16, Math.min(28, 18 + Math.min(10, degree)));
+            const labelY = 16 + radius;
             return (
-              <g key={n.id} transform={`translate(${p.x}, ${p.y})`} onClick={() => onNodeClick?.(n)} className="cursor-pointer">
-                <circle r="22" fill={fill} opacity={dim ? 0.2 : 0.95} stroke={inPath ? "#fca5a5" : "#cbd5e1"} strokeWidth={inPath ? 2 : 1} />
-                <text x="0" y="36" textAnchor="middle" fontSize="10" fill={dim ? "#64748b" : "#e2e8f0"}>
+              <g
+                key={n.id}
+                transform={`translate(${p.x}, ${p.y})`}
+                onClick={() => onNodeClick?.(n)}
+                onMouseDown={(e) => onNodeMouseDown(e, n.id)}
+                onMouseEnter={() => setHoveredNode(n)}
+                onMouseLeave={() => setHoveredNode((prev) => (prev?.id === n.id ? null : prev))}
+                className="cursor-pointer"
+              >
+                <circle
+                  r={radius}
+                  fill={fill}
+                  opacity={dim ? 0.2 : 0.95}
+                  stroke={searched ? "#fde047" : inPath ? "#fca5a5" : "#cbd5e1"}
+                  strokeWidth={searched ? 2.5 : inPath ? 2 : 1}
+                />
+                <text x="0" y={labelY} textAnchor="middle" fontSize="10" fill={dim ? "#64748b" : "#e2e8f0"}>
                   {shortNodeLabel(n)}
                 </text>
               </g>
@@ -294,6 +524,14 @@ export default function GraphCanvas({
           })}
         </g>
       </svg>
+      </div>
+      {hoveredNode && (
+        <div className="mt-2 rounded border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-300">
+          <span className="font-semibold text-slate-100">{hoveredNode.type || "Node"}</span>
+          {" - "}
+          {hoveredNode.label || hoveredNode.id}
+        </div>
+      )}
       <div className="mt-3 flex flex-wrap gap-2">
         {visibleTypes.map((t) => (
           <span key={t} className="inline-flex items-center gap-1 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[10px] text-slate-300">
