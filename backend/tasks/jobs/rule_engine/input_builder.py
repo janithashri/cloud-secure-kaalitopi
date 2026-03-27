@@ -10,9 +10,15 @@ logger = logging.getLogger(__name__)
 ASSET_TYPE_MAP = {
     # Resource Explorer (and current inventory pipeline) stores a simplified
     # type key like `ec2:security-group` / `iam:user`, not full CFN types.
+    # Both forms must be present for correct OPA input building.
+    "s3:bucket": "s3_bucket",
     "ec2:security-group": "security_group",
+    "ec2:instance": "ec2_instance",
     "iam:user": "iam_user",
     "iam:role": "iam_role",
+    "rds:db": "rds_instance",
+    "kms:key": "kms_key",
+    "cloudtrail:trail": "cloudtrail_trail",
     "AWS::IAM::Role": "iam_role",
     "AWS::IAM::User": "iam_user",
     "AWS::S3::Bucket": "s3_bucket",

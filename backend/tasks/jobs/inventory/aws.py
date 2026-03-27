@@ -476,3 +476,40 @@ def _process_account(account, role_name, neo4j_driver, stats, tenant, provider, 
 
     save_hashes(account_id, new_hashes)
 
+    # ----- Re-evaluate resources that have stored configs but zero findings -----
+    # This catches the case where a previous scan stored configs but OPA was down
+    # or resource types didn't match PACKAGE_MAP, so findings were never created.
+    from api.models import Finding
+    stored_configs = ResourceConfig.objects.filter(account_id=account_id).exclude(
+        config__has_key="_deleted"
+    )
+    re_eval_count = 0
+    for rc in stored_configs:
+        if rc.arn in delta_arns:
+            continue  # already evaluated above in this run
+        has_findings = Finding.objects.filter(arn=rc.arn, tenant=tenant).exists()
+        if has_findings:
+            continue  # already has findings from a previous run
+        try:
+            from tasks.jobs.rule_engine.evaluator import evaluate_resource
+
+            new_findings = evaluate_resource(
+                resource_type=rc.resource_type,
+                arn=rc.arn,
+                account_id=rc.account_id,
+                region=rc.region,
+                config=rc.config,
+                tags=rc.tags or {},
+                inventory_run=run,
+                tenant_id=tenant.id,
+                provider_id=provider.id,
+            )
+            stats["new_findings"] = stats.get("new_findings", 0) + new_findings
+            re_eval_count += 1
+        except Exception as e:
+            logger.error("Re-eval rule engine failed for %s: %s", rc.arn[:80], e)
+
+    if re_eval_count:
+        logger.info("Re-evaluated %s stored resources with missing findings", re_eval_count)
+
+
