@@ -1,5 +1,9 @@
 from django.urls import path
 from api.v1.views import (
+    AttackEngineQueryCatalogView,
+    AttackEngineRunAllView,
+    AttackEngineSingleQueryView,
+    CartographyGraphView,
     GraphDataView,
     InventorySummaryView,
     LoginView,
@@ -22,5 +26,25 @@ urlpatterns = [
         "providers/<int:provider_id>/graph/",
         GraphDataView.as_view(),
         name="inventory-graph",
+    ),
+    path(
+        "providers/<int:provider_id>/graph/cartography/",
+        CartographyGraphView.as_view(),
+        name="cartography-graph",
+    ),
+    path(
+        "providers/<int:provider_id>/attack-engine/run/",
+        AttackEngineRunAllView.as_view(),
+        name="attack-engine-run",
+    ),
+    path(
+        "providers/<int:provider_id>/attack-engine/query/<str:query_id>/",
+        AttackEngineSingleQueryView.as_view(),
+        name="attack-engine-single",
+    ),
+    path(
+        "attack-engine/queries/",
+        AttackEngineQueryCatalogView.as_view(),
+        name="attack-engine-catalog",
     ),
 ]

@@ -12,7 +12,37 @@ from accounts.models import Tenant, UserProfile
 from api.models import CustomRule, Finding, InventoryRun
 from api.serializers import CustomRuleSerializer, FindingSerializer
 from providers.models import Provider
+from tasks.jobs.attack_engine import ATTACK_QUERIES
+from tasks.jobs.attack_engine import get_attack_graph
+from tasks.jobs.attack_engine import run_all_queries
 from tasks.jobs.inventory.neo4j_writer import get_neo4j_driver
+
+
+def _json_safe(value):
+    if isinstance(value, (str, int, float, bool)) or value is None:
+        return value
+    if isinstance(value, list):
+        return [_json_safe(v) for v in value]
+    if isinstance(value, dict):
+        return {str(k): _json_safe(v) for k, v in value.items()}
+    # Neo4j temporal/spatial types and other custom values
+    return str(value)
+
+
+def _graph_node_id(props: dict) -> str:
+    for key in ("id", "arn", "name", "provider_element_id", "groupid", "subnetid"):
+        value = props.get(key)
+        if value:
+            return str(value)
+    return str(hash(tuple(sorted(props.items()))))
+
+
+def _graph_node_label(props: dict, labels: list[str]) -> str:
+    raw = str(props.get("name") or props.get("id") or props.get("arn") or (labels[0] if labels else "Node"))
+    if raw.startswith("arn:"):
+        tail = raw.split("/")[-1] if "/" in raw else raw.split(":")[-1]
+        return tail or raw
+    return raw
 
 
 class RegisterView(APIView):
@@ -298,6 +328,127 @@ class GraphDataView(APIView):
             return Response({"nodes": [], "edges": []})
 
         return Response({"nodes": list(nodes.values()), "edges": edges})
+
+
+class CartographyGraphView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, provider_id: int):
+        tenant = request.user.profile.tenant
+        provider = get_object_or_404(Provider, id=provider_id, tenant=tenant)
+        account_id = provider.aws_account_id
+        label_filter = request.query_params.get("label")
+
+        driver = get_neo4j_driver()
+        nodes: dict[str, dict] = {}
+        edges: list[dict] = []
+        edge_seen: set[tuple[str, str, str]] = set()
+        try:
+            with driver.session() as session:
+                node_query = """
+                    MATCH (a:AWSAccount {id: $account_id})
+                    OPTIONAL MATCH (a)-[:RESOURCE]->(n)
+                    WHERE ($label IS NULL OR any(l IN labels(n) WHERE l = $label))
+                    RETURN a, n
+                    LIMIT 4000
+                """
+                for row in session.run(node_query, account_id=account_id, label=label_filter):
+                    for alias in ("a", "n"):
+                        node = row.get(alias)
+                        if node is None:
+                            continue
+                        props = _json_safe(dict(node))
+                        labels = list(node.labels)
+                        node_id = _graph_node_id(props)
+                        nodes[node_id] = {
+                            "id": node_id,
+                            "label": _graph_node_label(props, labels),
+                            "type": labels[0] if labels else "Node",
+                            "labels": labels,
+                            "properties": props,
+                        }
+
+                rel_query = """
+                    MATCH (a:AWSAccount {id: $account_id})
+                    MATCH (a)-[:RESOURCE]->(n)-[r]->(m)
+                    WHERE ($label IS NULL OR any(l IN labels(n) WHERE l = $label) OR any(l IN labels(m) WHERE l = $label))
+                    RETURN n, r, m
+                    LIMIT 5000
+                """
+                for i, row in enumerate(session.run(rel_query, account_id=account_id, label=label_filter)):
+                    n = row.get("n")
+                    m = row.get("m")
+                    r = row.get("r")
+                    if n is None or m is None or r is None:
+                        continue
+                    n_props = _json_safe(dict(n))
+                    m_props = _json_safe(dict(m))
+                    n_labels = list(n.labels)
+                    m_labels = list(m.labels)
+                    source = _graph_node_id(n_props)
+                    target = _graph_node_id(m_props)
+
+                    if source not in nodes:
+                        nodes[source] = {
+                            "id": source,
+                            "label": _graph_node_label(n_props, n_labels),
+                            "type": n_labels[0] if n_labels else "Node",
+                            "labels": n_labels,
+                            "properties": n_props,
+                        }
+                    if target not in nodes:
+                        nodes[target] = {
+                            "id": target,
+                            "label": _graph_node_label(m_props, m_labels),
+                            "type": m_labels[0] if m_labels else "Node",
+                            "labels": m_labels,
+                            "properties": m_props,
+                        }
+
+                    rel_type = str(r.type)
+                    edge_key = (source, target, rel_type)
+                    if edge_key in edge_seen:
+                        continue
+                    edge_seen.add(edge_key)
+                    edges.append(
+                        {
+                            "id": f"edge-{i}-{source}-{target}-{rel_type}",
+                            "source": source,
+                            "target": target,
+                            "relationship": rel_type,
+                        }
+                    )
+        except Exception as exc:
+            return Response({"nodes": [], "edges": [], "error": str(exc)})
+
+        return Response({"nodes": list(nodes.values()), "edges": edges})
+
+
+class AttackEngineQueryCatalogView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        return Response(ATTACK_QUERIES)
+
+
+class AttackEngineRunAllView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, provider_id: int):
+        tenant = request.user.profile.tenant
+        provider = get_object_or_404(Provider, id=provider_id, tenant=tenant)
+        results = run_all_queries(provider.aws_account_id)
+        return Response({"results": results})
+
+
+class AttackEngineSingleQueryView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, provider_id: int, query_id: str):
+        tenant = request.user.profile.tenant
+        provider = get_object_or_404(Provider, id=provider_id, tenant=tenant)
+        result = get_attack_graph(query_id, provider.aws_account_id)
+        return Response(result)
 
 
 # --- Findings (Rule Engine) ---
