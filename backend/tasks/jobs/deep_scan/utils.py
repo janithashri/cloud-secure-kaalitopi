@@ -1,5 +1,6 @@
 import os
 import time
+import uuid
 from contextlib import contextmanager
 
 import neo4j
@@ -13,7 +14,9 @@ _driver_cache: dict[str, neo4j.Driver] = {}
 def build_ingestion_config(deep_scan: DeepScanModel) -> IngestionConfig:
     from django.conf import settings
 
-    update_tag = int(time.time())
+    # Must be unique per scan to avoid cross-tenant/provider snapshot collisions
+    # when multiple deep scans run simultaneously.
+    update_tag = int(uuid.uuid4().int % (2**63 - 1))
     perm_file = getattr(settings, "CARTOGRAPHY_PERMISSION_RELATIONSHIPS_FILE", "")
     return IngestionConfig(
         neo4j_uri=settings.NEO4J_SHARED_URI,
