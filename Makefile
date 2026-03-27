@@ -1,16 +1,16 @@
 DC=docker-compose
 
 up:
-	$(DC) up -d
+	$(DC) up -d --renew-anon-volumes
 
 down:
-	$(DC) down
+	$(DC) down -v
 
 build:
 	$(DC) build
 
 rebuild:
-	$(DC) up -d --build
+	$(DC) up -d --build --renew-anon-volumes
 
 migrate:
 	$(DC) exec backend python manage.py migrate
