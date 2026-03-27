@@ -358,13 +358,13 @@ CloudSecure's IAM role requires the following read-only permissions:
 
 ---
 
-# 🛡️ CloudSecure: Intelligent Cloud & IaC Security Auditor
+# 🛡️ CloudSecure CLI
 
 CloudSecure is a comprehensive security posture management tool built by **Team Kaali Topi**. It audits Infrastructure as Code (Terraform) to find misconfigurations .
 
 ---
 
-## 🚀 cloudSecure-kaaliTopi CLI (Python Scanner)
+## 🚀 cloudSecure-kaalitopi CLI (Python Scanner)
 
 The `cloudsecure-kaalitopi` package is our official CLI tool, allowing you to run security audits directly from your terminal.
 
