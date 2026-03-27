@@ -105,9 +105,6 @@ CloudSecure maps every finding to one or more compliance frameworks:
   <img src="docs/images/dashboard.png" alt="Security Dashboard" width="900">
 </p>
 
-<p align="center">
-  <img src="docs/images/custom-rules.png" alt="CloudSecure — Find & Fix Cloud Misconfigurations Before Attackers Do" width="900">
-</p>
 
 The dashboard gives you an at-a-glance view of your security posture:
 - **Total Findings** — open issues to address
@@ -115,6 +112,11 @@ The dashboard gives you an at-a-glance view of your security posture:
 - **Resources Scanned** — count across all AWS services
 - **Frameworks** — active compliance mappings (CIS, DPDP, RBI, SBE)
 - Breakdowns by severity, resource type, and compliance framework
+
+### Add Custom Rules
+<p align="center">
+  <img src="docs/images/custom-rules.png" alt="CloudSecure — Find & Fix Cloud Misconfigurations Before Attackers Do" width="900">
+</p>
 
 ### Attack Path Analysis
 <p align="center">
