@@ -5,6 +5,21 @@
 *.pem
 secrets/
 *.key
+IaC_backend/venv
+IaC_backend/__pycache__/
+IaC_backend/.env
+
+cloud-secure-kaalitopi/frontend/.env
+cloud-secure-kaalitopi/frontend/node_modules
+cloud-secure-kaalitopi/Cloudsecure_cli/.env
+
+
+# Python build artifacts
+dist/
+build/
+*.egg-info/
+__pycache__/
+.pypirc
 
 # Keep example env files (safe to commit)
 !.env.example

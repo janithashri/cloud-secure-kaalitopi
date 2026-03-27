@@ -11,6 +11,7 @@ import FindingsPage from "./pages/FindingsPage";
 import ReportsPage from "./pages/ReportsPage";
 import DocsPage from "./pages/DocsPage";
 import DeepScanPage from "./pages/DeepScanPage";
+import IaC from "./components/IaC";
 
 function ProtectedRoute({ children }) {
   const { isAuthenticated } = useAuth();
@@ -35,6 +36,7 @@ function App() {
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/docs" element={<DocsPage />} />
+        <Route path="/iac" element={<IaC />} />
 
         {/* Protected routes with sidebar */}
         <Route
