@@ -138,7 +138,7 @@ The dashboard gives you an at-a-glance view of your security posture:
 ---
 
 ## 🏗️ Architecture
-'''
+```
 ┌─────────────────────────────────────────────────────────────┐
 │                        Browser                              │
 │                React + Vite (port 3000)                     │
@@ -164,7 +164,7 @@ The dashboard gives you an at-a-glance view of your security posture:
           │   STS AssumeRole   │          │  (Cloned Temp)    │
           └────────────────────┘          └───────────────────┘
 
-'''
+```
 
 | Component | Technology | Role |
 |---|---|---|
@@ -374,6 +374,38 @@ The `cloudsecure-kaalitopi` package is our official CLI tool, allowing you to ru
 
 ```bash
 pip install cloudsecure-kaalitopi  #This will install the package locally on your system and you can scan the files locally
+```
+
+---
+
+## 🛠️ Useful Commands
+
+| Command | Description |
+|---|---|
+| `cloudsecure-kaalitopi --version` | To know the current verion of the CLI tool. |
+| `cloudsecure-kaalitopi iac test.tf` | To scan the file locally , present in the current working directory. |
+| `cloudsecure-kaalitopi iac test.tf --csv-export` | To scan as well as save the CSV report locally. |
+| `cloudsecure-kaalitopi iac test.tf --pdf-export` | To scan as well as save the PDF report locally. |
+| `cloudsecure-kaalitopi --help` | To get more information about the CLI tool. |
+
+---
+
+## 🐛 Troubleshooting
+
+**`NoCredentialError` on connection test**
+The backend mounts `~/.aws` from your host. Run `aws configure` on your machine, or set `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` in `.env`.
+
+**`Resource Explorer index not found`**
+Run `aws resource-explorer-2 create-index --type AGGREGATOR --region us-east-1` and wait for the index to reach `ACTIVE` state (can take several minutes to over an hour). Verify with `aws resource-explorer-2 get-index --region us-east-1`. Ensure `AWS_DEFAULT_REGION=us-east-1` in your `.env`.
+
+**`Password authentication failed` for PostgreSQL**
+The Postgres volume was likely initialized with a different password. Reset it:
+```bash
+docker compose down -v
+docker compose up -d
+make migrate
+```
+
 ```
 
 ---
