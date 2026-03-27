@@ -178,9 +178,19 @@ Edit `.env` with your values:
 | Variable | Description | Example |
 |---|---|---|
 | `SECRET_KEY` | Django secret key | `python -c "import secrets; print(secrets.token_urlsafe(50))"` |
+| `POSTGRES_DB` | PostgreSQL database name | `cloudsecure` |
+| `POSTGRES_USER` | PostgreSQL username | `cloudsecure` |
 | `POSTGRES_PASSWORD` | PostgreSQL password | `localpostgres123` |
+| `POSTGRES_HOST` | PostgreSQL host (Docker service name) | `db` |
+| `POSTGRES_PORT` | PostgreSQL port | `5432` |
+| `VALKEY_URL` | Valkey/Redis broker URL | `redis://valkey:6379/0` |
+| `NEO4J_URI` | Neo4j bolt URI | `bolt://neo4j:7687` |
+| `NEO4J_USER` | Neo4j username | `neo4j` |
 | `NEO4J_PASSWORD` | Neo4j password (min 8 chars) | `localneo4j123` |
-| `AWS_DEFAULT_REGION` | Primary AWS region for Resource Explorer | `ap-south-1` |
+| `DJANGO_SETTINGS_MODULE` | Django settings module | `cloudsecure.settings.local` |
+| `AWS_DEFAULT_REGION` | Region where Resource Explorer aggregator is active | `us-east-1` |
+| `AWS_ACCESS_KEY_ID` | Leave blank — uses `~/.aws` credentials | _(blank)_ |
+| `AWS_SECRET_ACCESS_KEY` | Leave blank — uses `~/.aws` credentials | _(blank)_ |
 | `DEBUG` | Django debug mode | `True` |
 
 ---
@@ -194,7 +204,10 @@ CloudSecure uses an IAM role with read-only permissions. Run these commands once
 aws sts get-caller-identity --query Account --output text
 
 # Enable Resource Explorer (required for resource discovery)
-aws resource-explorer-2 create-index --type AGGREGATOR --region ap-south-1
+aws resource-explorer-2 create-index --type AGGREGATOR --region us-east-1
+
+# Verify the index is ACTIVE (may take several minutes to over an hour)
+aws resource-explorer-2 get-index --region us-east-1
 
 # Create the CloudSecure IAM role
 aws iam create-role \
@@ -309,7 +322,7 @@ CloudSecure's IAM role requires the following read-only permissions:
 The backend mounts `~/.aws` from your host. Run `aws configure` on your machine, or set `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` in `.env`.
 
 **`Resource Explorer index not found`**
-Run `aws resource-explorer-2 create-index --type AGGREGATOR --region ap-south-1` and wait ~2 minutes for the index to reach `ACTIVE` state.
+Run `aws resource-explorer-2 create-index --type AGGREGATOR --region us-east-1` and wait for the index to reach `ACTIVE` state (can take several minutes to over an hour). Verify with `aws resource-explorer-2 get-index --region us-east-1`. Ensure `AWS_DEFAULT_REGION=us-east-1` in your `.env`.
 
 **`Password authentication failed` for PostgreSQL**
 The Postgres volume was likely initialized with a different password. Reset it:
