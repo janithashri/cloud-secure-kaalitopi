@@ -1,6 +1,9 @@
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
+from django.conf import settings
+from contextlib import contextmanager
 import json
+import neo4j
 from rest_framework import status
 from rest_framework.authtoken.models import Token
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -9,6 +12,8 @@ from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
 
 from accounts.models import Tenant, UserProfile
+from api.models import DeepScan
+from api.models import DeepScanStateChoices as DeepScanStateChoices
 from api.models import CustomRule, Finding, InventoryRun
 from api.serializers import CustomRuleSerializer, FindingSerializer
 from providers.models import Provider
@@ -16,6 +21,8 @@ from tasks.jobs.attack_engine import ATTACK_QUERIES
 from tasks.jobs.attack_engine import get_attack_graph
 from tasks.jobs.attack_engine import run_all_queries
 from tasks.jobs.inventory.neo4j_writer import get_neo4j_driver
+
+_tenant_graph_driver_cache: dict[str, neo4j.Driver] = {}
 
 
 def _json_safe(value):
@@ -43,6 +50,118 @@ def _graph_node_label(props: dict, labels: list[str]) -> str:
         tail = raw.split("/")[-1] if "/" in raw else raw.split(":")[-1]
         return tail or raw
     return raw
+
+
+def _provider_graph_database(provider: Provider, scan_id: str | None = None) -> str:
+    if scan_id:
+        scan = (
+            DeepScan.objects.filter(
+                tenant_id=provider.tenant_id,
+                provider_id=provider.id,
+                scan_id=scan_id,
+                is_graph_database_deleted=False,
+            )
+            .order_by("-completed_at", "-started_at")
+            .first()
+        )
+        if scan and scan.graph_database:
+            return scan.graph_database
+
+    latest_scan = (
+        DeepScan.objects.filter(
+            tenant_id=provider.tenant_id,
+            provider_id=provider.id,
+            state=DeepScanStateChoices.COMPLETED,
+            is_graph_database_deleted=False,
+        )
+        .order_by("-completed_at", "-started_at")
+        .first()
+    )
+    if latest_scan and latest_scan.graph_database:
+        return latest_scan.graph_database
+    return getattr(settings, "NEO4J_SHARED_DATABASE", "neo4j")
+
+
+def _provider_scan_update_tag(provider: Provider, scan_id: str | None = None) -> int | None:
+    if scan_id:
+        scan = (
+            DeepScan.objects.filter(
+                tenant_id=provider.tenant_id,
+                provider_id=provider.id,
+                scan_id=scan_id,
+                is_graph_database_deleted=False,
+            )
+            .order_by("-completed_at", "-started_at")
+            .first()
+        )
+        if scan and scan.update_tag is not None:
+            return int(scan.update_tag)
+
+    latest_scan = (
+        DeepScan.objects.filter(
+            tenant_id=provider.tenant_id,
+            provider_id=provider.id,
+            state=DeepScanStateChoices.COMPLETED,
+            is_graph_database_deleted=False,
+            update_tag__isnull=False,
+        )
+        .order_by("-completed_at", "-started_at")
+        .first()
+    )
+    if latest_scan and latest_scan.update_tag is not None:
+        return int(latest_scan.update_tag)
+    return None
+
+
+def _get_tenant_graph_driver(tenant_id: str) -> neo4j.Driver:
+    from tasks.jobs.deep_scan.utils import _build_tenant_neo4j_uri
+
+    tenant_uri = _build_tenant_neo4j_uri(str(tenant_id))
+    auth_candidates: list[tuple[str, str]] = []
+    tenant_user = getattr(settings, "NEO4J_TENANT_USER", "") or ""
+    tenant_password = getattr(settings, "NEO4J_TENANT_PASSWORD", "") or ""
+    shared_user = getattr(settings, "NEO4J_SHARED_USER", settings.NEO4J_USER)
+    shared_password = getattr(settings, "NEO4J_SHARED_PASSWORD", settings.NEO4J_PASSWORD)
+
+    if tenant_user:
+        auth_candidates.append((tenant_user, tenant_password))
+    if (shared_user, shared_password) not in auth_candidates:
+        auth_candidates.append((shared_user, shared_password))
+
+    last_exc = None
+    for user, password in auth_candidates:
+        cache_key = f"{tenant_uri}|{user}"
+        if cache_key not in _tenant_graph_driver_cache:
+            _tenant_graph_driver_cache[cache_key] = neo4j.GraphDatabase.driver(
+                tenant_uri,
+                auth=(user, password),
+            )
+        driver = _tenant_graph_driver_cache[cache_key]
+        try:
+            driver.verify_connectivity()
+            return driver
+        except Exception as exc:
+            last_exc = exc
+            continue
+    if last_exc:
+        raise last_exc
+    raise RuntimeError("Unable to initialize Neo4j tenant graph driver")
+
+
+@contextmanager
+def _provider_graph_session(provider: Provider, scan_id: str | None = None):
+    database = _provider_graph_database(provider, scan_id=scan_id)
+    tenant_template = getattr(settings, "NEO4J_TENANT_URI_TEMPLATE", "") or ""
+    # If tenant DB URI template is not configured, use shared driver directly.
+    if not tenant_template.strip():
+        shared_driver = get_neo4j_driver()
+        with shared_driver.session(database=database) as session:
+            yield session
+        return
+
+    driver = _get_tenant_graph_driver(str(provider.tenant_id))
+    with driver.session(database=database) as session:
+        yield session
 
 
 class RegisterView(APIView):
@@ -338,44 +457,50 @@ class CartographyGraphView(APIView):
         provider = get_object_or_404(Provider, id=provider_id, tenant=tenant)
         account_id = provider.aws_account_id
         label_filter = request.query_params.get("label")
+        scan_id = request.query_params.get("scan_id")
+        update_tag = _provider_scan_update_tag(provider, scan_id=scan_id)
+        if update_tag is None:
+            # Strict isolation: no snapshot tag means no graph visibility.
+            # Prevents account-id based leakage across tenants/providers.
+            return Response({"nodes": [], "edges": []})
 
-        driver = get_neo4j_driver()
         nodes: dict[str, dict] = {}
         edges: list[dict] = []
         edge_seen: set[tuple[str, str, str]] = set()
         try:
-            with driver.session() as session:
+            with _provider_graph_session(provider, scan_id=scan_id) as session:
                 node_query = """
-                    MATCH (a:AWSAccount {id: $account_id})
-                    OPTIONAL MATCH (a)-[:RESOURCE]->(n)
-                    WHERE ($label IS NULL OR any(l IN labels(n) WHERE l = $label))
-                    RETURN a, n
+                    MATCH (n)
+                    WHERE toInteger(coalesce(n.lastupdated, -1)) = toInteger($update_tag)
+                      AND ($label IS NULL OR any(l IN labels(n) WHERE l = $label))
+                    RETURN n
                     LIMIT 4000
                 """
-                for row in session.run(node_query, account_id=account_id, label=label_filter):
-                    for alias in ("a", "n"):
-                        node = row.get(alias)
-                        if node is None:
-                            continue
-                        props = _json_safe(dict(node))
-                        labels = list(node.labels)
-                        node_id = _graph_node_id(props)
-                        nodes[node_id] = {
-                            "id": node_id,
-                            "label": _graph_node_label(props, labels),
-                            "type": labels[0] if labels else "Node",
-                            "labels": labels,
-                            "properties": props,
-                        }
+                for row in session.run(node_query, account_id=account_id, label=label_filter, update_tag=update_tag):
+                    node = row.get("n")
+                    if node is None:
+                        continue
+                    props = _json_safe(dict(node))
+                    labels = list(node.labels)
+                    node_id = _graph_node_id(props)
+                    nodes[node_id] = {
+                        "id": node_id,
+                        "label": _graph_node_label(props, labels),
+                        "type": labels[0] if labels else "Node",
+                        "labels": labels,
+                        "properties": props,
+                    }
 
                 rel_query = """
-                    MATCH (a:AWSAccount {id: $account_id})
-                    MATCH (a)-[:RESOURCE]->(n)-[r]->(m)
-                    WHERE ($label IS NULL OR any(l IN labels(n) WHERE l = $label) OR any(l IN labels(m) WHERE l = $label))
+                    MATCH (n)-[r]->(m)
+                    WHERE toInteger(coalesce(r.lastupdated, -1)) = toInteger($update_tag)
+                      AND toInteger(coalesce(n.lastupdated, -1)) = toInteger($update_tag)
+                      AND toInteger(coalesce(m.lastupdated, -1)) = toInteger($update_tag)
+                      AND ($label IS NULL OR any(l IN labels(n) WHERE l = $label) OR any(l IN labels(m) WHERE l = $label))
                     RETURN n, r, m
-                    LIMIT 5000
+                    LIMIT 8000
                 """
-                for i, row in enumerate(session.run(rel_query, account_id=account_id, label=label_filter)):
+                for i, row in enumerate(session.run(rel_query, account_id=account_id, label=label_filter, update_tag=update_tag)):
                     n = row.get("n")
                     m = row.get("m")
                     r = row.get("r")
@@ -437,7 +562,16 @@ class AttackEngineRunAllView(APIView):
     def post(self, request, provider_id: int):
         tenant = request.user.profile.tenant
         provider = get_object_or_404(Provider, id=provider_id, tenant=tenant)
-        results = run_all_queries(provider.aws_account_id)
+        scan_id = request.data.get("scan_id")
+        update_tag = _provider_scan_update_tag(provider, scan_id=scan_id)
+        if update_tag is None:
+            return Response({"results": []})
+        with _provider_graph_session(provider) as session:
+            results = run_all_queries(
+                provider.aws_account_id,
+                neo4j_session=session,
+                update_tag=update_tag,
+            )
         return Response({"results": results})
 
 
@@ -447,7 +581,25 @@ class AttackEngineSingleQueryView(APIView):
     def get(self, request, provider_id: int, query_id: str):
         tenant = request.user.profile.tenant
         provider = get_object_or_404(Provider, id=provider_id, tenant=tenant)
-        result = get_attack_graph(query_id, provider.aws_account_id)
+        scan_id = request.query_params.get("scan_id")
+        update_tag = _provider_scan_update_tag(provider, scan_id=scan_id)
+        if update_tag is None:
+            return Response(
+                {
+                    "query_id": query_id,
+                    "violated": False,
+                    "nodes": [],
+                    "edges": [],
+                    "paths": [],
+                }
+            )
+        with _provider_graph_session(provider) as session:
+            result = get_attack_graph(
+                query_id,
+                provider.aws_account_id,
+                neo4j_session=session,
+                update_tag=update_tag,
+            )
         return Response(result)
 
 

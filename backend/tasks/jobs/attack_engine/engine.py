@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
 from typing import Any
 
 from tasks.jobs.attack_engine.queries import ATTACK_QUERIES
@@ -25,7 +26,9 @@ def _node_id(node: dict[str, Any]) -> str:
     return str(hash(tuple(sorted(node.items()))))
 
 
-def _normalize_records(records: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+def _normalize_records(
+    records: list[dict[str, Any]], update_tag: int | None = None
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
     nodes_map: dict[str, dict[str, Any]] = {}
     edges: list[dict[str, Any]] = []
     paths: list[dict[str, Any]] = []
@@ -37,6 +40,8 @@ def _normalize_records(records: list[dict[str, Any]]) -> tuple[list[dict[str, An
                 for item in value:
                     if hasattr(item, "labels"):
                         props = _json_safe(dict(item))
+                        if update_tag is not None and int(props.get("lastupdated", -1)) != int(update_tag):
+                            continue
                         labels = list(item.labels)
                         nid = _node_id(props)
                         nodes_map[nid] = {
@@ -49,6 +54,8 @@ def _normalize_records(records: list[dict[str, Any]]) -> tuple[list[dict[str, An
                         path_nodes.append(nid)
             elif hasattr(value, "labels"):
                 props = _json_safe(dict(value))
+                if update_tag is not None and int(props.get("lastupdated", -1)) != int(update_tag):
+                    continue
                 labels = list(value.labels)
                 nid = _node_id(props)
                 nodes_map[nid] = {
@@ -86,7 +93,17 @@ def _normalize_records(records: list[dict[str, Any]]) -> tuple[list[dict[str, An
     return list(nodes_map.values()), dedup_edges, paths
 
 
-def run_attack_query(query_id: str, account_id: str) -> dict:
+@contextmanager
+def _session_scope(neo4j_session):
+    if neo4j_session is not None:
+        yield neo4j_session
+        return
+    driver = get_neo4j_driver()
+    with driver.session() as session:
+        yield session
+
+
+def run_attack_query(query_id: str, account_id: str, neo4j_session=None, update_tag: int | None = None) -> dict:
     query = ATTACK_QUERY_MAP.get(query_id)
     if not query:
         return {
@@ -99,11 +116,10 @@ def run_attack_query(query_id: str, account_id: str) -> dict:
             "error": "query_not_found",
         }
 
-    driver = get_neo4j_driver()
     try:
-        with driver.session() as session:
+        with _session_scope(neo4j_session) as session:
             records = [dict(r) for r in session.run(query["cypher"], account_id=account_id)]
-        nodes, edges, paths = _normalize_records(records)
+        nodes, edges, paths = _normalize_records(records, update_tag=update_tag)
         return {
             "query_id": query["id"],
             "name": query["name"],
@@ -135,10 +151,15 @@ def run_attack_query(query_id: str, account_id: str) -> dict:
         }
 
 
-def run_all_queries(account_id: str) -> list[dict]:
+def run_all_queries(account_id: str, neo4j_session=None, update_tag: int | None = None) -> list[dict]:
     results: list[dict[str, Any]] = []
     for query in ATTACK_QUERIES:
-        result = run_attack_query(query["id"], account_id)
+        result = run_attack_query(
+            query["id"],
+            account_id,
+            neo4j_session=neo4j_session,
+            update_tag=update_tag,
+        )
         results.append(
             {
                 "query_id": query["id"],
@@ -154,8 +175,13 @@ def run_all_queries(account_id: str) -> list[dict]:
     return results
 
 
-def get_attack_graph(query_id: str, account_id: str) -> dict:
-    result = run_attack_query(query_id, account_id)
+def get_attack_graph(query_id: str, account_id: str, neo4j_session=None, update_tag: int | None = None) -> dict:
+    result = run_attack_query(
+        query_id,
+        account_id,
+        neo4j_session=neo4j_session,
+        update_tag=update_tag,
+    )
     if not result.get("violated"):
         return {
             "query_id": query_id,
