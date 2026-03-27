@@ -6,6 +6,9 @@ from celery.signals import worker_ready
 
 from app.core.config import get_settings
 
+# Deep-scan imports cartography (only installed in celery-deep-scan image).
+# The minimal backend registers the core inventory worker only.
+
 settings = get_settings()
 
 os.environ.setdefault("AWS_DEFAULT_REGION", settings.aws_default_region)
