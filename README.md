@@ -17,16 +17,7 @@
   <img alt="OPA" src="https://img.shields.io/badge/OPA-rego-purple.svg">
 </p>
 
-<p align="center">
-  <a href="#-features">Features</a> •
-  <a href="#-supported-aws-services">AWS Services</a> •
-  <a href="#-compliance-frameworks">Frameworks</a> •
-  <a href="#-how-it-works">How It Works</a> •
-  <a href="#-architecture">Architecture</a> •
-  <a href="#-getting-started">Getting Started</a> •
-  <a href="#-screenshots">Screenshots</a> •
-  <a href="#-useful-commands">Commands</a>
-</p>
+
 
 ---
 
