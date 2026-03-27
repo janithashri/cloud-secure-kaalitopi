@@ -36,7 +36,13 @@ function App() {
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/docs" element={<DocsPage />} />
-        <Route path="/iac" element={<IaC />} />
+        <Route path="/iac" element={
+          
+            <AppLayout>
+              <IaC />
+            </AppLayout>
+          
+        } />
 
         {/* Protected routes with sidebar */}
         <Route
