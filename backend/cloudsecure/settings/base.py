@@ -135,12 +135,29 @@ CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
 CELERY_TASK_ROUTES = {
     "tasks.tasks.perform_inventory_pull_task": {"queue": "inventory"},
+    "tasks.jobs.deep_scan.scan.run": {"queue": "deep_scan"},
 }
 
 # Neo4j (Phase 2 — delta inventory)
 NEO4J_URI = os.environ.get("NEO4J_URI", "bolt://neo4j:7687")
 NEO4J_USER = os.environ.get("NEO4J_USER", "neo4j")
 NEO4J_PASSWORD = os.environ.get("NEO4J_PASSWORD", "")
+
+# Neo4j — Deep Scan shared ingestion database
+NEO4J_SHARED_URI = os.environ.get("NEO4J_SHARED_URI", NEO4J_URI)
+NEO4J_SHARED_USER = os.environ.get("NEO4J_SHARED_USER", NEO4J_USER)
+NEO4J_SHARED_PASSWORD = os.environ.get("NEO4J_SHARED_PASSWORD", NEO4J_PASSWORD)
+NEO4J_SHARED_DATABASE = os.environ.get("NEO4J_SHARED_DATABASE", "neo4j")
+
+# Neo4j — Deep Scan tenant isolation (optional, falls back to shared)
+NEO4J_TENANT_URI_TEMPLATE = os.environ.get("NEO4J_TENANT_URI_TEMPLATE", "")
+NEO4J_TENANT_USER = os.environ.get("NEO4J_TENANT_USER", NEO4J_SHARED_USER)
+NEO4J_TENANT_PASSWORD = os.environ.get("NEO4J_TENANT_PASSWORD", NEO4J_SHARED_PASSWORD)
+
+# Cartography — permission relationships config file
+CARTOGRAPHY_PERMISSION_RELATIONSHIPS_FILE = os.environ.get(
+    "CARTOGRAPHY_PERMISSION_RELATIONSHIPS_FILE", ""
+)
 
 # OPA Rule Engine
 OPA_URL = os.environ.get("OPA_URL", "http://localhost:8181")

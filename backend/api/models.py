@@ -1,3 +1,5 @@
+import uuid
+
 from django.db import models
 
 
@@ -147,3 +149,50 @@ class ConfigChangeCursor(models.Model):
 
     def __str__(self):
         return f"{self.account_id}@{self.region}"
+
+
+class DeepScanStateChoices(models.TextChoices):
+    SCHEDULED = "SCHEDULED", "Scheduled"
+    EXECUTING = "EXECUTING", "Executing"
+    COMPLETED = "COMPLETED", "Completed"
+    FAILED = "FAILED", "Failed"
+
+
+class DeepScan(models.Model):
+    class Meta:
+        db_table = "deep_scans"
+        ordering = ["-started_at"]
+        indexes = [
+            models.Index(fields=["scan_id"]),
+            models.Index(fields=["provider_id", "state"]),
+            models.Index(fields=["tenant_id", "state"]),
+        ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    scan_id = models.UUIDField(unique=True, default=uuid.uuid4, editable=False)
+    tenant = models.ForeignKey("accounts.Tenant", on_delete=models.CASCADE)
+    provider = models.ForeignKey(
+        "providers.Provider", on_delete=models.CASCADE, related_name="deep_scans"
+    )
+    state = models.CharField(
+        max_length=20,
+        choices=DeepScanStateChoices.choices,
+        default=DeepScanStateChoices.SCHEDULED,
+        db_index=True,
+    )
+    progress = models.IntegerField(default=0)
+    started_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    duration = models.IntegerField(null=True, blank=True)
+    task_id = models.CharField(max_length=255, null=True, blank=True)
+    update_tag = models.BigIntegerField(null=True, blank=True)
+    graph_database = models.CharField(max_length=255, null=True, blank=True)
+    is_graph_database_deleted = models.BooleanField(default=False)
+    ingestion_exceptions = models.JSONField(null=True, blank=True, default=dict)
+
+    def __str__(self):
+        return f"DeepScan {self.scan_id} (provider={self.provider_id}, state={self.state})"
+
+    @property
+    def is_terminal(self):
+        return self.state in (DeepScanStateChoices.COMPLETED, DeepScanStateChoices.FAILED)

@@ -72,6 +72,20 @@ services:
       - db
       - valkey
 
+  celery-deep-scan:
+    build: ./backend
+    command: celery -A cloudsecure worker --loglevel=info -Q deep_scan --concurrency=2
+    volumes:
+      - ./backend:/app
+      - ~/.aws:/root/.aws:ro
+    env_file: .env
+    environment:
+      DJANGO_SETTINGS_MODULE: cloudsecure.settings.local
+    depends_on:
+      - db
+      - valkey
+      - neo4j
+
   opa:
     image: openpolicyagent/opa:latest
     command: run --server --addr 0.0.0.0:8181

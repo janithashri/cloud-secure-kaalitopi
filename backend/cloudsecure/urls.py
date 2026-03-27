@@ -30,4 +30,5 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/auth/", include("api.v1.urls")),
     path("api/v1/", include("providers.v1.urls")),
+    path("api/v1/", include("api.v1.deep_scan_urls")),
 ]

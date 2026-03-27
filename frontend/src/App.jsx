@@ -10,6 +10,7 @@ import ConnectPage from "./pages/ConnectPage";
 import FindingsPage from "./pages/FindingsPage";
 import ReportsPage from "./pages/ReportsPage";
 import DocsPage from "./pages/DocsPage";
+import DeepScanPage from "./pages/DeepScanPage";
 
 function ProtectedRoute({ children }) {
   const { isAuthenticated } = useAuth();
@@ -73,6 +74,14 @@ function App() {
           element={
             <ProtectedRoute>
               <AppLayout><FindingsPage /></AppLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/deep-scan"
+          element={
+            <ProtectedRoute>
+              <AppLayout><DeepScanPage /></AppLayout>
             </ProtectedRoute>
           }
         />

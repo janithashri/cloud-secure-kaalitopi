@@ -48,6 +48,15 @@ const navItems = [
     ),
   },
   {
+    to: "/deep-scan",
+    label: "Deep Scan",
+    icon: (
+      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 3l7.5 4.5v4.5c0 5.25-3.5 8.25-7.5 9-4-0.75-7.5-3.75-7.5-9V7.5L12 3z" />
+      </svg>
+    ),
+  },
+  {
     to: "/reports",
     label: "Reports",
     icon: (
