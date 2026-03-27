@@ -1,10 +1,9 @@
 <h1 align="center">
-  <br>
-  <img src="docs/images/hero.png" alt="CloudSecure — Find & Fix Cloud Misconfigurations Before Attackers Do" width="900">
-  <br>
+  
   <br>
   CloudSecure
   <br>
+  
 </h1>
 
 <h4 align="center">Open-source Cloud Security Posture Management (CSPM) for AWS</h4>
@@ -34,6 +33,11 @@
 > **CloudSecure** is an open-source Cloud Security Posture Management (CSPM) platform that continuously scans your AWS environment, detects misconfigurations, maps attack paths, and produces actionable compliance findings — all from a single self-hosted dashboard.
 
 ---
+
+<p align="center">
+  <img src="docs/images/hero.png" alt="CloudSecure — Find & Fix Cloud Misconfigurations Before Attackers Do" width="900">
+</p>
+
 
 ## ✨ Features
 
