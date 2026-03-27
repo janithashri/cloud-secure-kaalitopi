@@ -167,7 +167,7 @@ const sections = [
             Clone & Configure
           </h4>
           <pre className="mt-2 overflow-x-auto rounded bg-slate-950 p-3 text-xs text-slate-300">
-            {`git clone <repo-url>
+{`git clone <repo-url>
 cd cloud-secure-kaalitopi
 cp .env.example .env
 # Edit .env with the values below`}
@@ -213,7 +213,7 @@ cp .env.example .env
             Start the App
           </h4>
           <pre className="mt-2 overflow-x-auto rounded bg-slate-950 p-3 text-xs text-slate-300">
-            {`docker compose up -d --build
+{`docker compose up -d --build
 docker compose exec backend python manage.py migrate
 docker compose exec backend python manage.py createsuperuser`}
           </pre>
@@ -226,7 +226,7 @@ docker compose exec backend python manage.py createsuperuser`}
             AWS IAM Role Setup
           </h4>
           <pre className="mt-2 overflow-x-auto rounded bg-slate-950 p-3 text-xs text-slate-300">
-            {`# Get your Account ID
+{`# Get your Account ID
 aws sts get-caller-identity --query Account --output text
 
 # Enable Resource Explorer (must be us-east-1)
@@ -251,7 +251,7 @@ aws iam put-role-policy \\
               View required IAM permissions
             </summary>
             <pre className="mt-2 overflow-x-auto rounded bg-slate-950 p-3 text-xs text-slate-300">
-              {`{
+{`{
   "Version": "2012-10-17",
   "Statement": [{
     "Effect": "Allow",
