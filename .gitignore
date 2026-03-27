@@ -8,7 +8,7 @@ secrets/
 IaC_backend/venv
 IaC_backend/__pycache__/
 IaC_backend/.env
-
+IaC_backend/temp_scans/
 cloud-secure-kaalitopi/frontend/.env
 cloud-secure-kaalitopi/frontend/node_modules
 cloud-secure-kaalitopi/Cloudsecure_cli/.env
