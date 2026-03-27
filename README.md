@@ -32,6 +32,10 @@
 
 > **CloudSecure** is an open-source Cloud Security Posture Management (CSPM) platform that continuously scans your AWS environment, detects misconfigurations, maps attack paths, and produces actionable compliance findings — all from a single self-hosted dashboard.
 
+<p align="center">
+  <img src="docs/images/custom-rules.png" alt="Custom Rules — Create tenant rules with your own Rego policy" width="900">
+</p>
+
 ---
 
 <p align="center">
@@ -104,6 +108,11 @@ The dashboard gives you an at-a-glance view of your security posture:
 - **Resources Scanned** — count across all AWS services
 - **Frameworks** — active compliance mappings (CIS, DPDP, RBI, SBE)
 - Breakdowns by severity, resource type, and compliance framework
+
+### Attack Path Analysis
+<p align="center">
+  <img src="docs/images/attack-path.png" alt="MITRE Attack Techniques — Attack Path Graph" width="900">
+</p>
 
 ---
 
