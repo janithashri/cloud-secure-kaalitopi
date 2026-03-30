@@ -12,6 +12,10 @@ IaC_backend/temp_scans/
 cloud-secure-kaalitopi/frontend/.env
 cloud-secure-kaalitopi/frontend/node_modules
 cloud-secure-kaalitopi/Cloudsecure_cli/.env
+report_*.pdf
+report_*.csv
+IaC_backend/report_*.pdf
+IaC_backend/report_*.csv
 
 
 # Python build artifacts
