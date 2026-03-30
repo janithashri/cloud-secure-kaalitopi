@@ -174,7 +174,6 @@ export default function GraphCanvas({
   const dragRef = useRef(null);
   const nodeDragRef = useRef(null);
   const [viewport, setViewport] = useState({ scale: 1, tx: 0, ty: 0 });
-  const [searchTerm, setSearchTerm] = useState("");
   const [hoveredNode, setHoveredNode] = useState(null);
   const [showEdgeLabels, setShowEdgeLabels] = useState(false);
   const [manualNodePositions, setManualNodePositions] = useState({});
@@ -232,17 +231,6 @@ export default function GraphCanvas({
     }
     return map;
   }, [nodes, edges]);
-
-  const searchedNodeIds = useMemo(() => {
-    const q = searchTerm.trim().toLowerCase();
-    if (!q) return new Set();
-    const set = new Set();
-    for (const n of nodes) {
-      const hay = `${n.label || ""} ${n.type || ""} ${n.id || ""}`.toLowerCase();
-      if (hay.includes(q)) set.add(n.id);
-    }
-    return set;
-  }, [nodes, searchTerm]);
 
   function fitToGraph() {
     if (!nodes.length) {
@@ -415,14 +403,6 @@ export default function GraphCanvas({
           Scroll to zoom, drag background to pan ({Math.round(viewport.scale * 100)}%)
         </span>
       </div>
-      <div className="mb-2">
-        <input
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          placeholder="Search node by name, id, or type..."
-          className="w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-200 placeholder:text-slate-500"
-        />
-      </div>
       <div className="max-h-[70vh] overflow-auto rounded bg-slate-950">
       <svg
         ref={svgRef}
@@ -495,7 +475,6 @@ export default function GraphCanvas({
             const dim = hasPath && !inPath;
             const base = colorForNodeType(n.type);
             const fill = inPath ? "#dc2626" : base;
-            const searched = searchedNodeIds.has(n.id);
             const degree = degreeByNodeId[n.id] || 0;
             const radius = Math.max(16, Math.min(28, 18 + Math.min(10, degree)));
             const labelY = 16 + radius;
@@ -513,8 +492,8 @@ export default function GraphCanvas({
                   r={radius}
                   fill={fill}
                   opacity={dim ? 0.2 : 0.95}
-                  stroke={searched ? "#fde047" : inPath ? "#fca5a5" : "#cbd5e1"}
-                  strokeWidth={searched ? 2.5 : inPath ? 2 : 1}
+                  stroke={inPath ? "#fca5a5" : "#cbd5e1"}
+                  strokeWidth={inPath ? 2 : 1}
                 />
                 <text x="0" y={labelY} textAnchor="middle" fontSize="10" fill={dim ? "#64748b" : "#e2e8f0"}>
                   {shortNodeLabel(n)}
