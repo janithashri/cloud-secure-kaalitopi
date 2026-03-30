@@ -17,16 +17,7 @@
   <img alt="OPA" src="https://img.shields.io/badge/OPA-rego-purple.svg">
 </p>
 
-<p align="center">
-  <a href="#-features">Features</a> •
-  <a href="#-supported-aws-services">AWS Services</a> •
-  <a href="#-compliance-frameworks">Frameworks</a> •
-  <a href="#-how-it-works">How It Works</a> •
-  <a href="#-architecture">Architecture</a> •
-  <a href="#-getting-started">Getting Started</a> •
-  <a href="#-screenshots">Screenshots</a> •
-  <a href="#-useful-commands">Commands</a>
-</p>
+
 
 ---
 
@@ -358,13 +349,13 @@ CloudSecure's IAM role requires the following read-only permissions:
 
 ---
 
-# 🛡️ CloudSecure: Intelligent Cloud & IaC Security Auditor
+# 🛡️ CloudSecure CLI
 
 CloudSecure is a comprehensive security posture management tool built by **Team Kaali Topi**. It audits Infrastructure as Code (Terraform) to find misconfigurations .
 
 ---
 
-## 🚀 cloudSecure-kaaliTopi CLI (Python Scanner)
+## 🚀 cloudSecure-kaalitopi CLI (Python Scanner)
 
 The `cloudsecure-kaalitopi` package is our official CLI tool, allowing you to run security audits directly from your terminal.
 
@@ -450,6 +441,71 @@ Ensure OPA is running (`docker compose ps`) and the Rego policies loaded success
 **Frontend blank page or CORS errors**
 Rebuild the frontend: `docker compose up -d --build frontend`. Check browser console for failing API requests.
 
+## 🐛 Troubleshooting                                                                                                                        
+                                         
+  > **Before logging in or signing up**, always ensure migrations are run:                                                                     
+  > ```bash
+  > docker compose exec backend python manage.py migrate                                                                                       
+  > ```                                                     
+
+  > **Use `docker compose`** (Docker Compose V2) not `docker-compose` (older V1). If `docker compose` is not found, update Docker Desktop.     
+   
+  ---                                                                                                                                          
+                                                            
+  **Findings not appearing after scan**
+  This is usually caused by three issues working together:
+  1. **OPA unreachable** — Ensure `OPA_URL: http://opa:8181` is set in `docker-compose.yml` for `backend` and `celery`, and `opa` is listed    
+  under `depends_on`. Without this, Celery starts before OPA is ready and policy loading fails silently.                                       
+  2. **Resource type mappings** — The rule engine must map all Resource Explorer short-form types (`s3:bucket`, `ec2:instance`, `rds:db`,      
+  `kms:key`, `cloudtrail:trail`).                                                                                                              
+  3. **Delta scan trap** — If a first scan discovered resources but generated no findings (due to the above issues), subsequent scans skip them
+   as unchanged. The re-evaluation fallback will automatically force-evaluate any resource with zero findings on the next scan.                
+                                                            
+  ---                                                                                                                                          
+                                                            
+  **`NoCredentialError` on connection test**                                                                                                   
+  The backend container needs AWS credentials. The `docker-compose.yml` mounts `~/.aws` from your host. Run `aws configure` on your machine
+  first, or set `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` in `.env`.                                                                     
+                                                            
+  ---                                                                                                                                          
+                                                            
+  **`Resource Explorer index not found`**
+  Run `aws resource-explorer-2 create-index --type AGGREGATOR --region us-east-1` and verify with `aws resource-explorer-2 get-index --region
+  us-east-1` — wait until `State` is `ACTIVE` (can take several minutes to over an hour). Ensure `AWS_DEFAULT_REGION=us-east-1` in your `.env`.
+   
+  ---                                                                                                                                          
+                                                            
+  **`Password authentication failed` for PostgreSQL**                                                                                          
+  The Postgres volume was initialized with a different password. Reset it:
+  ```bash                                                                                                                                      
+  docker compose down -v                                    
+  docker compose up -d                                                                                                                         
+  docker compose exec backend python manage.py migrate                                                                                         
+   
+  ---                                                                                                                                          
+  Neo4j connection refused                                  
+  Neo4j takes ~30 seconds to start. Check logs with docker compose logs neo4j and wait for Started. before triggering a scan.
+
+  ---                                                                                                                                          
+  Celery not picking up tasks
+  Check logs: docker compose logs -f celery — you should see celery@... ready. If not, restart: docker compose restart celery. Also ensure     
+  OPA_URL is set and opa is in depends_on.                  
+                                                                                                                                               
+  ---                                                       
+  Scan stuck in running state                                                                                                                  
+  Check Celery worker logs: docker compose logs -f celery. Common causes: AWS rate limiting, missing IAM permissions, or Neo4j not ready.      
+  Verify the Resource Explorer index is ACTIVE.
+                                                                                                                                               
+  ---                                                       
+  Frontend blank page or CORS errors                                                                                                           
+  Rebuild the frontend: docker compose up -d --build frontend. Check browser console for failing API requests. Ensure                          
+  VITE_API_URL=http://localhost:8000 in docker-compose.yml.
+                                                                                                                                               
+  ---                                                       
+  Dashboard shows no data after scan                                                                                                           
+  Make sure you have connected a provider, tested the connection successfully, and run at least one scan. If the scan completed but findings   
+  are empty, see the Findings not appearing section above.
+  ```                               
 ---
 
 ## 🤝 Contributing

@@ -11,7 +11,7 @@ import {
 } from "../api/graph";
 
 export default function DeepScanPage() {
-  const { token, api } = useAuth();
+  const { token, api, user } = useAuth();
   const [providers, setProviders] = useState([]);
   const [providerId, setProviderId] = useState("");
   const [scanId, setScanId] = useState(null);
@@ -27,6 +27,8 @@ export default function DeepScanPage() {
   const [running, setRunning] = useState(false);
   const [graphError, setGraphError] = useState("");
   const [detailNode, setDetailNode] = useState(null);
+  const [cancelBusyScanId, setCancelBusyScanId] = useState(null);
+  const [graphReloading, setGraphReloading] = useState(false);
 
   const apiBase = import.meta.env.VITE_API_URL || "http://localhost:8000";
   const headers = useMemo(
@@ -39,14 +41,76 @@ export default function DeepScanPage() {
     const data = await res.json();
     const list = Array.isArray(data) ? data : data.results || [];
     setProviders(list);
-    if (!providerId && list.length) setProviderId(String(list[0].id));
+    const currentExists = list.some((p) => String(p.id) === String(providerId));
+    if (!list.length) {
+      setProviderId("");
+      setGraphData({ nodes: [], edges: [] });
+      setHistory([]);
+      setStatus(null);
+      setScanId(null);
+      setAttackResults({});
+      setSelectedAttack(null);
+      setAttackPathGraph(null);
+      setDetailNode(null);
+      setCancelBusyScanId(null);
+      return;
+    }
+    if (!currentExists) {
+      setProviderId(String(list[0].id));
+      setGraphData({ nodes: [], edges: [] });
+      setHistory([]);
+      setAttackResults({});
+      setSelectedAttack(null);
+      setAttackPathGraph(null);
+      setDetailNode(null);
+      setCancelBusyScanId(null);
+    }
   }
 
   async function loadHistory(pid) {
     if (!pid) return;
     const res = await fetch(`${apiBase}/api/v1/deep-scan/?provider_id=${pid}&limit=10`, { headers });
     const data = await res.json();
-    setHistory(data.scans || []);
+    const scans = data.scans || [];
+    setHistory(scans);
+
+    // Re-attach UI to any in-progress scan when returning to this page.
+    const active = scans.find((s) => s.state === "SCHEDULED" || s.state === "EXECUTING");
+    if (active?.scan_id) {
+      setScanId(active.scan_id);
+      setStatus((prev) => ({
+        ...(prev || {}),
+        scan_id: active.scan_id,
+        state: active.state,
+        progress: active.progress ?? prev?.progress ?? 0,
+      }));
+    } else if (scanId) {
+      // Clear stale polling target if nothing is currently active.
+      setScanId(null);
+      // Show the most recent completed/failed scan status after relogin/navigation.
+      const latestFinished = scans.find((s) => s.state === "COMPLETED" || s.state === "FAILED");
+      if (latestFinished) {
+        setStatus({
+          scan_id: latestFinished.scan_id,
+          state: latestFinished.state,
+          progress: latestFinished.progress ?? 100,
+        });
+      } else {
+        setStatus(null);
+      }
+    } else {
+      // First page load with no active scan: restore latest terminal scan into status panel.
+      const latestFinished = scans.find((s) => s.state === "COMPLETED" || s.state === "FAILED");
+      if (latestFinished) {
+        setStatus({
+          scan_id: latestFinished.scan_id,
+          state: latestFinished.state,
+          progress: latestFinished.progress ?? 100,
+        });
+      } else if (!active) {
+        setStatus(null);
+      }
+    }
   }
 
   async function loadGraph(pid, label = "") {
@@ -58,6 +122,20 @@ export default function DeepScanPage() {
     } catch (err) {
       setGraphError("Unable to load Cartography graph.");
       setGraphData({ nodes: [], edges: [] });
+    }
+  }
+
+  async function showLatestGraph() {
+    if (!providerId) return;
+    setGraphReloading(true);
+    setGraphError("");
+    try {
+      setAttackPathGraph(null);
+      setDetailNode(null);
+      setSelectedAttack(null);
+      await loadGraph(providerId, graphLabelFilter);
+    } finally {
+      setGraphReloading(false);
     }
   }
 
@@ -113,20 +191,54 @@ export default function DeepScanPage() {
     }
   }
 
-  useEffect(() => {
-    if (!token) return;
-    loadProviders().catch(() => {});
-    loadAttackCatalog().catch(() => {});
-  }, [token]);
+  async function cancelScan(scid) {
+    if (!scid || !providerId) return;
+    setCancelBusyScanId(scid);
+    try {
+      const res = await fetch(`${apiBase}/api/v1/deep-scan/${scid}/`, { method: "DELETE", headers });
+      if (res.ok) {
+        // Clear current UI state for a fresh graph render.
+        setScanId(null);
+        setStatus(null);
+        setGraphData({ nodes: [], edges: [] });
+        setAttackPathGraph(null);
+        setDetailNode(null);
+        setSelectedAttack(null);
+        setAttackResults({});
+        loadHistory(providerId).catch(() => {});
+      }
+    } finally {
+      setCancelBusyScanId(null);
+    }
+  }
 
   useEffect(() => {
+    if (!token) return;
+    // Reset tenant-scoped page data when auth identity changes.
+    setProviderId("");
+    setGraphData({ nodes: [], edges: [] });
+    setHistory([]);
+    setStatus(null);
+    setScanId(null);
+    setAttackResults({});
+    setSelectedAttack(null);
+    setAttackPathGraph(null);
+    setDetailNode(null);
+    setCancelBusyScanId(null);
+    loadProviders().catch(() => {});
+    loadAttackCatalog().catch(() => {});
+  }, [token, user?.id]);
+
+  useEffect(() => {
+    if (!providerId) return;
     loadHistory(providerId).catch(() => {});
     loadGraph(providerId, graphLabelFilter).catch(() => {});
   }, [providerId]);
 
   useEffect(() => {
+    if (!providerId) return;
     loadGraph(providerId, graphLabelFilter).catch(() => {});
-  }, [graphLabelFilter]);
+  }, [graphLabelFilter, providerId]);
 
   useEffect(() => {
     if (!scanId) return;
@@ -145,6 +257,7 @@ export default function DeepScanPage() {
   }, [scanId, providerId, headers]);
 
   const selectedQuery = attackQueries.find((q) => q.id === selectedAttack) || null;
+  const latestScan = history.length ? history[0] : null;
   const nodeTypes = useMemo(() => {
     const types = Array.from(new Set((graphData.nodes || []).map((n) => n.type).filter(Boolean)));
     types.sort();
@@ -189,11 +302,29 @@ export default function DeepScanPage() {
         >
           {loading ? "Starting..." : "Start Deep Scan"}
         </button>
+        <button
+          onClick={showLatestGraph}
+          disabled={!providerId || graphReloading}
+          className="rounded border border-slate-700 bg-slate-800 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-slate-700 disabled:opacity-60"
+        >
+          {graphReloading ? "Loading..." : "Show latest scan graph"}
+        </button>
       </div>
 
       {status && (
-        <div className="mb-4 rounded border border-slate-700 bg-slate-800 p-3 text-sm">
-          State: {status.state} | Progress: {status.progress ?? 0}% {status.scan_id ? `| Scan: ${status.scan_id}` : ""}
+        <div className="mb-4 flex items-center justify-between gap-3 rounded border border-slate-700 bg-slate-800 p-3 text-sm">
+          <div>
+            State: {status.state} | Progress: {status.progress ?? 0}% {status.scan_id ? `| Scan: ${status.scan_id}` : ""}
+          </div>
+          {(status.state === "SCHEDULED" || status.state === "EXECUTING") && status.scan_id && (
+            <button
+              onClick={() => cancelScan(status.scan_id)}
+              disabled={cancelBusyScanId === status.scan_id}
+              className="rounded border border-slate-700 bg-slate-900 px-3 py-1 text-xs text-slate-200 hover:bg-slate-700 disabled:opacity-60"
+            >
+              {cancelBusyScanId === status.scan_id ? "Cancelling..." : "Cancel ongoing scan"}
+            </button>
+          )}
         </div>
       )}
 
@@ -227,12 +358,21 @@ export default function DeepScanPage() {
           {graphError ? (
             <div className="rounded border border-red-700/40 bg-red-900/20 p-3 text-sm text-red-300">{graphError}</div>
           ) : (
-            <GraphCanvas
-              graphData={graphData}
-              attackPathGraph={attackPathGraph}
-              selectedAttack={selectedAttack}
-              onNodeClick={setDetailNode}
-            />
+            <>
+              <GraphCanvas
+                graphData={graphData}
+                attackPathGraph={attackPathGraph}
+                selectedAttack={selectedAttack}
+                onNodeClick={setDetailNode}
+              />
+              {graphData?.nodes?.length === 0 && (
+                <div className="rounded border border-slate-700 bg-slate-900/20 p-3 text-xs text-slate-300">
+                  {status?.state === "SCHEDULED" || status?.state === "EXECUTING"
+                    ? "Deep scan is running; graph will appear after completion."
+                    : "No deep scan snapshot for this provider yet. Run deep scan to build graph."}
+                </div>
+              )}
+            </>
           )}
 
           {selectedQuery && (
@@ -279,17 +419,24 @@ export default function DeepScanPage() {
       )}
 
       <div className="mt-6 rounded border border-slate-700 bg-slate-800 p-4">
-        <h2 className="mb-3 text-sm font-semibold text-slate-200">Recent scans</h2>
-        {history.length === 0 ? (
+        <h2 className="mb-3 text-sm font-semibold text-slate-200">Latest scan</h2>
+        {!latestScan ? (
           <div className="text-sm text-slate-400">No deep scans yet.</div>
         ) : (
-          <div className="space-y-2">
-            {history.map((h) => (
-              <div key={h.scan_id} className="rounded border border-slate-700 p-2 text-xs">
-                <div>{h.state}</div>
-                <div className="text-slate-400">{h.scan_id}</div>
-              </div>
-            ))}
+          <div className="flex items-start justify-between gap-3 rounded border border-slate-700 p-2 text-xs">
+            <div>
+              <div>{latestScan.state}</div>
+              <div className="text-slate-400">{latestScan.scan_id}</div>
+            </div>
+            {(latestScan.state === "SCHEDULED" || latestScan.state === "EXECUTING") && (
+              <button
+                onClick={() => cancelScan(latestScan.scan_id)}
+                disabled={cancelBusyScanId === latestScan.scan_id}
+                className="mt-0.5 rounded border border-slate-700 bg-slate-800 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-700 disabled:opacity-60"
+              >
+                {cancelBusyScanId === latestScan.scan_id ? "Cancelling..." : "Cancel"}
+              </button>
+            )}
           </div>
         )}
       </div>
