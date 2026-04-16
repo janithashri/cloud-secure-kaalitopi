@@ -2,6 +2,7 @@ from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
 from django.conf import settings
 from contextlib import contextmanager
+from django.db import transaction 
 import json
 import neo4j
 from rest_framework import status
@@ -9,18 +10,28 @@ from rest_framework.authtoken.models import Token
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework.decorators import api_view
+from django.db.models import Count
 from django.shortcuts import get_object_or_404
+from rest_framework import generics,status
+
+
+from rest_framework import status
+from api.tasks import perform_iac_scan
+from api.models import IaCFinding
 
 from accounts.models import Tenant, UserProfile
 from api.models import DeepScan
 from api.models import DeepScanStateChoices as DeepScanStateChoices
 from api.models import CustomRule, Finding, InventoryRun
-from api.serializers import CustomRuleSerializer, FindingSerializer
+from api.serializers import CustomRuleSerializer, FindingSerializer,IaCFindingSerializer, InventoryRunSerializer
+
 from providers.models import Provider
 from tasks.jobs.attack_engine import ATTACK_QUERIES
 from tasks.jobs.attack_engine import get_attack_graph
 from tasks.jobs.attack_engine import run_all_queries
 from tasks.jobs.inventory.neo4j_writer import get_neo4j_driver
+  
 
 _tenant_graph_driver_cache: dict[str, neo4j.Driver] = {}
 
@@ -35,6 +46,26 @@ def _json_safe(value):
     # Neo4j temporal/spatial types and other custom values
     return str(value)
 
+
+@api_view(['GET'])
+def get_audited_repositories(request):
+    """Returns a list of unique repositories and their finding counts."""
+    repos = IaCFinding.objects.filter(user=request.user).values('repository_url').annotate(count=Count('id'))
+    return Response(repos)
+
+@api_view(['DELETE'])
+def delete_repository_findings(request):
+    """Deletes all findings associated with a specific repository URL."""
+    repo_url = request.query_params.get('repo_url')
+    if not repo_url:
+        return Response({"error": "repo_url is required"}, status=400)
+    
+    deleted_count, _ = IaCFinding.objects.filter(
+        user=request.user, 
+        repository_url=repo_url
+    ).delete()
+    
+    return Response({"message": f"Deleted {deleted_count} findings for {repo_url}"})
 
 def _graph_node_id(props: dict) -> str:
     for key in ("id", "arn", "name", "provider_element_id", "groupid", "subnetid"):
@@ -164,6 +195,110 @@ def _provider_graph_session(provider: Provider, scan_id: str | None = None):
         yield session
 
 
+
+class IaCFindingListView(generics.ListAPIView):
+    """
+    Returns all IaC findings for the logged-in user.
+    """
+    serializer_class = IaCFindingSerializer
+
+    def get_queryset(self):
+        return IaCFinding.objects.filter(user=self.request.user)
+
+class IaCFindingDetailView(generics.DestroyAPIView):
+    """
+    Handles deleting a specific finding.
+    """
+    queryset = IaCFinding.objects.all()
+    serializer_class = IaCFindingSerializer
+
+    def get_queryset(self):
+        return self.queryset.filter(user=self.request.user)
+
+# class IaCScanTriggerView(APIView):
+#     def post(self, request):
+#         repo_url = request.data.get("repo_url")
+#         print("Received scan request for repo:", repo_url)  # Debug log
+#         if not repo_url:
+#             return Response({"error": "Repository URL is required"}, status=400)
+
+#         # 1. Immediate Fetch: Check if this repo was scanned before
+#         # This is what makes the dashboard feel instant!
+#         existing_findings = IaCFinding.objects.filter(
+#             user=request.user, 
+#             repository_url=repo_url
+#         )
+        
+#         if existing_findings.exists():
+#             serializer = IaCFindingSerializer(existing_findings, many=True)
+#             return Response({
+#                 "status": "completed",
+#                 "message": "Loaded results from cache",
+#                 "findings": serializer.data,
+#                 "count": len(serializer.data)
+#             }, status=200)
+
+#         # 2. Trigger background scan if no cache found
+#         # We pass user_id and tenant_id so the task knows who owns the data
+#         perform_iac_scan.delay(
+#             user_id=request.user.id,
+#             repo_url=repo_url,
+#             tenant_id=request.user.profile.tenant.id
+#         )
+#         print("Triggered background scan for repo:", repo_url)  # Debug log
+
+#         return Response({
+#             "status": "processing",
+#             "message": "Scan started in the background..."
+#         }, status=202)
+        
+class IaCScanTriggerView(APIView):
+    def post(self, request):
+        repo_url = request.data.get("repo_url")
+        
+        if not repo_url:
+            return Response({"error": "Repository URL is required"}, status=400)
+
+        # 1. Check if results already exist in the database
+        existing_findings = IaCFinding.objects.filter(
+            user=request.user, 
+            repository_url=repo_url
+        )
+        
+        if existing_findings.exists():
+            serializer = IaCFindingSerializer(existing_findings, many=True)
+            return Response({
+                "status": "completed", # Frontend sees this and stops polling
+                "findings": serializer.data,
+                "count": existing_findings.count()
+            }, status=200)
+
+        # 2. Check if a scan is already "In Progress"
+        # We use a simple Cache check to prevent starting duplicate tasks
+        from django.core.cache import cache
+        cache_key = f"scan_in_progress_{request.user.id}_{repo_url}"
+        
+        if cache.get(cache_key):
+            return Response({
+                "status": "started", # Tells frontend to keep showing the loader
+                "message": "Scan is already running..."
+            }, status=202)
+
+        # 3. Trigger new background scan
+        # Set a cache flag for 5 minutes (adjust based on max scan time)
+        cache.set(cache_key, True, 300) 
+        
+        perform_iac_scan.delay(
+            user_id=request.user.id,
+            repo_url=repo_url,
+            tenant_id=request.user.profile.tenant.id
+        )
+
+        return Response({
+            "status": "started", # Matches the frontend 'pollResults' check
+            "message": "Scan initiated..."
+        }, status=202)
+        
 class RegisterView(APIView):
     permission_classes = [AllowAny]
 
@@ -173,36 +308,46 @@ class RegisterView(APIView):
         password = request.data.get("password", "")
 
         if not username or not password:
-            return Response(
-                {"detail": "username and password required"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return Response({"detail": "Username and password required"}, status=400)
 
-        if User.objects.filter(username=username).exists():
-            return Response(
-                {"username": ["A user with this username already exists."]},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        try:
+            with transaction.atomic():
+                # 1. Check if user exists
+                if User.objects.filter(username=username).exists():
+                    return Response({"username": ["User already exists"]}, status=400)
 
-        user = User.objects.create_user(
-            username=username,
-            email=email or username,
-            password=password,
-        )
-        tenant = Tenant.objects.create(name=f"{username}'s workspace")
-        UserProfile.objects.create(user=user, tenant=tenant)
+                # 2. Create user
+                user = User.objects.create_user(
+                    username=username,
+                    email=email or username,
+                    password=password
+                )
 
-        return Response(
-            {"detail": "Account created successfully"},
-            status=status.HTTP_201_CREATED,
-        )
+                # 3. Create Tenant
+                tenant, _ = Tenant.objects.get_or_create(name=f"{username}'s workspace")
 
+                # 4. The Critical Fix: Use get_or_create
+                # This handles the signal collision safely
+                profile, created = UserProfile.objects.get_or_create(
+                    user=user,
+                    defaults={'tenant': tenant}
+                )
+                
+                # If it already existed but had no tenant, update it
+                if not created:
+                    profile.tenant = tenant
+                    profile.save()
 
+                return Response({"detail": "Account created successfully"}, status=201)
+        except Exception as e:
+            return Response({"detail": str(e)}, status=500)
+        
+        
 class LoginView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        username = request.data.get("username")
+        username = request.data.get("username") or request.data.get("email")
         password = request.data.get("password")
         if not username or not password:
             return Response(

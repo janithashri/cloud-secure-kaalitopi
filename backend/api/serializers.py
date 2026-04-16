@@ -1,7 +1,19 @@
 from rest_framework import serializers
 from api.models import CustomRule, Finding, InventoryRun, ResourceConfig
+from .models import IaCFinding
 
 
+class IaCFindingSerializer(serializers.ModelSerializer):
+   
+    description = serializers.CharField(source='rule_description')
+    suggested_fix = serializers.CharField(source='ai_remediation')
+
+    class Meta:
+        model = IaCFinding
+        fields = ['id', 'repository_url', 'file_path', 'line_number', 
+                  'resource_id', 'rule_id', 'description', 'severity', 
+                  'suggested_fix', 'is_remediated', 'created_at']
+    
 class InventoryRunSerializer(serializers.ModelSerializer):
     class Meta:
         model = InventoryRun
