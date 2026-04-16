@@ -2,6 +2,47 @@ import uuid
 
 from django.db import models
 
+from django.contrib.auth.models import User
+
+class IaCFinding(models.Model):
+    SEVERITY_CHOICES = [
+        ("CRITICAL", "Critical"),
+        ("HIGH", "High"),
+        ("MEDIUM", "Medium"),
+        ("LOW", "Low"),
+    ]
+
+    # The Core Links
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="iac_findings")
+    tenant = models.ForeignKey("accounts.Tenant", on_delete=models.CASCADE)
+
+    # Repository & File Metadata
+    repository_url = models.URLField(max_length=500)
+    file_path = models.CharField(max_length=512)  # e.g., "terraform/s3.tf"
+    line_number = models.IntegerField(null=True, blank=True)
+    
+    # Vulnerability Details
+    resource_id = models.CharField(max_length=255) # e.g., "aws_s3_bucket.my_bucket"
+    rule_id = models.CharField(max_length=100)      # e.g., "CKV_AWS_18"
+    rule_description = models.TextField()
+    severity = models.CharField(max_length=20, choices=SEVERITY_CHOICES)
+    
+    # AI Remediation (Sarvam AI Integration)
+    ai_remediation = models.TextField(blank=True, null=True) 
+    is_remediated = models.BooleanField(default=False)
+
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["user", "repository_url"]),
+            models.Index(fields=["severity"]),
+        ]
+
+    def __str__(self):
+        return f"{self.rule_id} - {self.file_path}"
 
 class InventoryRun(models.Model):
     STATE_CHOICES = [
