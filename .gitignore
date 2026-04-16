@@ -61,6 +61,8 @@ db.sqlite3
 media/
 staticfiles/
 
+backend/temp_scans/
+backend/temp_scans
 # Celery
 celerybeat-schedule
 celerybeat.pid

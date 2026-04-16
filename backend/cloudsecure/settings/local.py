@@ -1,10 +1,17 @@
 # CloudSecure — local dev overrides
 from .base import *
-
+import os
 DEBUG = True
+
 
 # See every request in runserver terminal (so we know if requests reach Django on Windows)
 MIDDLEWARE = ["cloudsecure.middleware.DebugRequestMiddleware"] + list(MIDDLEWARE)
+
+
+
+
+# Scroll to the bottom and add:
+SARVAM_API_KEY = os.getenv("SARVAM_API_KEY")
 
 # Allow frontend from any origin in local dev (e.g. http://192.168.x.x:3000)
 CORS_ALLOW_ALL_ORIGINS = True
