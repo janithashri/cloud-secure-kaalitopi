@@ -9,14 +9,23 @@ from api.v1.views import (
     LoginView,
     LogoutView,
     MeView,
+    IaCScanTriggerView,
     RegisterView,
+    IaCFindingListView,
+    IaCFindingDetailView
 )
+import api.v1.views as views
 
 urlpatterns = [
     path("login/", LoginView.as_view(), name="auth-login"),
     path("register/", RegisterView.as_view(), name="auth-register"),
+    path('iac/scan/', IaCScanTriggerView.as_view(), name='iac-scan-trigger'),
     path("logout/", LogoutView.as_view(), name="auth-logout"),
+    path('iac/findings/', IaCFindingListView.as_view(), name='iac-findings-list'),
+    path('iac/findings/<int:pk>/', IaCFindingDetailView.as_view(), name='iac-finding-delete'),
     path("me/", MeView.as_view(), name="auth-me"),
+    path('iac/repositories/', views.get_audited_repositories, name='iac-repos'),
+    path('iac/repositories/delete/', views.delete_repository_findings, name='iac-repo-delete'),
     path(
         "providers/<int:provider_id>/inventory-summary/",
         InventorySummaryView.as_view(),

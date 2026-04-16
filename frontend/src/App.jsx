@@ -12,6 +12,7 @@ import ReportsPage from "./pages/ReportsPage";
 import DocsPage from "./pages/DocsPage";
 import DeepScanPage from "./pages/DeepScanPage";
 import IaC from "./components/IaC";
+import IaCFindingsPage from "./pages/IaCFindingsPage";
 
 function ProtectedRoute({ children }) {
   const { isAuthenticated } = useAuth();
@@ -74,6 +75,14 @@ function App() {
           element={
             <ProtectedRoute>
               <AppLayout><ConnectPage /></AppLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/iac-findings"
+          element={
+            <ProtectedRoute>
+              <AppLayout><IaCFindingsPage /></AppLayout>
             </ProtectedRoute>
           }
         />
