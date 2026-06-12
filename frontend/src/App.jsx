@@ -11,6 +11,7 @@ import FindingsPage from "./pages/FindingsPage";
 import ReportsPage from "./pages/ReportsPage";
 import DocsPage from "./pages/DocsPage";
 import DeepScanPage from "./pages/DeepScanPage";
+import GraphIntelligencePage from "./pages/GraphIntelligencePage";
 import IaC from "./components/IaC";
 import IaCFindingsPage from "./pages/IaCFindingsPage";
 
@@ -99,6 +100,14 @@ function App() {
           element={
             <ProtectedRoute>
               <AppLayout><DeepScanPage /></AppLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/graph-intelligence"
+          element={
+            <ProtectedRoute>
+              <AppLayout><GraphIntelligencePage /></AppLayout>
             </ProtectedRoute>
           }
         />

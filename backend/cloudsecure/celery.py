@@ -12,6 +12,7 @@ app = Celery("cloudsecure")
 app.config_from_object("django.conf:settings", namespace="CELERY")
 app.autodiscover_tasks(["tasks"])
 app.autodiscover_tasks(["tasks.jobs.deep_scan"], related_name="scan")
+app.autodiscover_tasks(["tasks.jobs.deep_scan"], related_name="graph_analytics")
 
 
 @worker_ready.connect

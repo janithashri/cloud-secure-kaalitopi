@@ -1,9 +1,12 @@
+import logging
 import os
 from types import SimpleNamespace
 from typing import Any
 
 from celery import Task
 from cloudsecure.celery import app as celery_app
+
+logger = logging.getLogger(__name__)
 
 from api.models import DeepScanStateChoices as StateChoices
 from tasks.jobs.deep_scan import db_utils
@@ -18,6 +21,7 @@ from tasks.jobs.deep_scan.sync import sync_graph_to_tenant_db
 from tasks.jobs.deep_scan.utils import build_ingestion_config
 from tasks.jobs.deep_scan.utils import get_neo4j_session
 from tasks.jobs.deep_scan.utils import get_tenant_neo4j_session
+import tasks.jobs.deep_scan.graph_analytics  # noqa: F401 — ensures Celery task is registered on worker boot
 
 DEFAULT_PROVIDER_TYPE = "aws"
 
@@ -78,6 +82,26 @@ def run(self: Task, tenant_id: str, scan_id: str, provider_id: int) -> dict[str,
                 root_node_label=get_root_node_label(provider_type),
             )
             db_utils.update_scan_progress(deep_scan, 97)
+
+            # ----------------------------------------------------------------
+            # Graph intelligence analytics — must NOT fail the scan
+            # ----------------------------------------------------------------
+            try:
+                from tasks.jobs.deep_scan.graph_analytics import (
+                    run_graph_analytics,
+                )
+
+                run_graph_analytics(
+                    neo4j_driver=shared_neo4j_session._driver,
+                    provider_id=str(deep_scan.provider.id),
+                    deep_scan_id=str(deep_scan.scan_id),
+                )
+            except Exception as graph_exc:
+                logger.warning(
+                    "Graph analytics failed, scan continues: %s", graph_exc
+                )
+            # ----------------------------------------------------------------
+
             from tasks.jobs.deep_scan.utils import _build_tenant_neo4j_uri
 
             tenant_uri = _build_tenant_neo4j_uri(str(deep_scan.tenant_id))
