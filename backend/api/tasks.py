@@ -114,4 +114,4 @@ def perform_iac_scan(user_id, repo_url, tenant_id):
         # 5. Cleanup temp folder
         if temp_path.exists():
             logger.info(f"🧹 Cleaning up directory: {temp_path}")
-            shutil.rmtree(temp_path, onerror=handle_remove_readonly)
+            shutil.rmtree(temp_path, onexc=handle_remove_readonly)
